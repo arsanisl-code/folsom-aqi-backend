@@ -99,7 +99,8 @@ async def health():
     Health check. Returns model load status and last refresh time.
     Used by deploy.sh to verify the service is up.
     """
-    cached = load_cached_forecast()
+    # FIXED: Force remote CDN fetch
+    cached = load_cached_forecast(prefer_remote=True)
     last_refresh = cached.get("generated_at", "never") if cached else "never"
 
     return {
@@ -152,7 +153,8 @@ async def get_current():
     Return only the current AQI reading (subset of /forecast).
     Lightweight endpoint for simple widgets.
     """
-    cached = load_cached_forecast()
+    # FIXED: Force remote CDN fetch
+    cached = load_cached_forecast(prefer_remote=True)
     if not cached:
         raise HTTPException(status_code=503, detail="No forecast data available yet.")
     return {
@@ -168,7 +170,8 @@ async def get_history():
     Return the 72-hour history array (actual vs forecast).
     Used by the dashboard to draw the comparison chart.
     """
-    cached = load_cached_forecast()
+    # FIXED: Force remote CDN fetch
+    cached = load_cached_forecast(prefer_remote=True)
     if not cached:
         raise HTTPException(status_code=503, detail="No forecast data available yet.")
     return {
