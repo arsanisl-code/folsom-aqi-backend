@@ -68,33 +68,38 @@ def _cache_is_fresh(path: Path) -> bool:
     return age < CACHE_MAX_AGE_SECONDS
 
 
-def _fetch_with_retry(url: str, params: dict, max_retries: int = 3) -> dict:
-    """GET request with exponential backoff (2s, 4s, 8s)."""
+def _fetch_with_retry(url: str, params: dict, max_retries: int = 4) -> dict:
+    """GET request with rate-limit-aware exponential backoff."""
     last_exc = None
     for attempt in range(max_retries):
         try:
-            # Construct the full URL for logging
             full_url = f"{url}?{urllib.parse.urlencode(params)}"
-            print(f"[data_fetcher] Calling: {full_url}", file=sys.stderr)
+            print(f"[data_fetcher] Attempt {attempt+1}: {full_url[:120]}...", file=sys.stderr)
             resp = requests.get(url, params=params, timeout=60)
             resp.raise_for_status()
             return resp.json()
         except requests.exceptions.HTTPError as exc:
+            status = exc.response.status_code if exc.response is not None else 0
             body = ""
             try:
                 body = exc.response.text[:500]
             except Exception:
                 pass
-            print(f"[data_fetcher] Attempt {attempt+1} HTTP {exc.response.status_code}: {body}",
-                  file=sys.stderr)
+            print(f"[data_fetcher] HTTP {status}: {body}", file=sys.stderr)
             last_exc = exc
+            # 429 = rate limited — wait much longer
+            if status == 429:
+                retry_after = int(exc.response.headers.get("Retry-After", 30))
+                wait = max(retry_after, 30)
+                print(f"[data_fetcher] Rate limited! Waiting {wait}s...", file=sys.stderr)
+                time.sleep(wait)
+                continue
         except Exception as exc:
-            print(f"[data_fetcher] Attempt {attempt+1} failed: {exc}",
-                  file=sys.stderr)
+            print(f"[data_fetcher] Attempt {attempt+1} failed: {exc}", file=sys.stderr)
             last_exc = exc
         wait = 2 ** (attempt + 1)
-        print(f"[data_fetcher] Retrying in {wait}s...", file=sys.stderr)
         if attempt < max_retries - 1:
+            print(f"[data_fetcher] Retrying in {wait}s...", file=sys.stderr)
             time.sleep(wait)
     raise RuntimeError(f"All {max_retries} retries failed for {url}: {last_exc}")
 
@@ -234,8 +239,9 @@ def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
     }
     try:
         aq_data  = _fetch_with_retry(AQ_ENDPOINT, aq_params)
-        wx_data  = _fetch_with_retry(WEATHER_ENDPOINT, wx_params)
         aq_df    = _hourly_to_df(aq_data, AQ_VARS)
+        time.sleep(2)  # Courtesy delay to avoid 429 rate-limiting on shared Render IPs
+        wx_data  = _fetch_with_retry(WEATHER_ENDPOINT, wx_params)
         wx_df    = _hourly_to_df(wx_data, WEATHER_VARS)
 
         merged   = _merge_aq_weather(aq_df, wx_df)
