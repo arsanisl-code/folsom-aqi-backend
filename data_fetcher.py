@@ -70,21 +70,33 @@ def _cache_is_fresh(path: Path) -> bool:
 
 def _fetch_with_retry(url: str, params: dict, max_retries: int = 3) -> dict:
     """GET request with exponential backoff (2s, 4s, 8s)."""
+    last_exc = None
     for attempt in range(max_retries):
         try:
             # Construct the full URL for logging
             full_url = f"{url}?{urllib.parse.urlencode(params)}"
             print(f"[data_fetcher] Calling: {full_url}", file=sys.stderr)
-            resp = requests.get(url, params=params, timeout=30)
+            resp = requests.get(url, params=params, timeout=60)
             resp.raise_for_status()
             return resp.json()
-        except Exception as exc:
-            wait = 2 ** (attempt + 1)
-            print(f"[data_fetcher] Attempt {attempt+1} failed: {exc}. Retrying in {wait}s...",
+        except requests.exceptions.HTTPError as exc:
+            body = ""
+            try:
+                body = exc.response.text[:500]
+            except Exception:
+                pass
+            print(f"[data_fetcher] Attempt {attempt+1} HTTP {exc.response.status_code}: {body}",
                   file=sys.stderr)
-            if attempt < max_retries - 1:
-                time.sleep(wait)
-    raise RuntimeError(f"All {max_retries} retries failed for {url}")
+            last_exc = exc
+        except Exception as exc:
+            print(f"[data_fetcher] Attempt {attempt+1} failed: {exc}",
+                  file=sys.stderr)
+            last_exc = exc
+        wait = 2 ** (attempt + 1)
+        print(f"[data_fetcher] Retrying in {wait}s...", file=sys.stderr)
+        if attempt < max_retries - 1:
+            time.sleep(wait)
+    raise RuntimeError(f"All {max_retries} retries failed for {url}: {last_exc}")
 
 
 def _hourly_to_df(data: dict, variables: list[str]) -> pd.DataFrame:
