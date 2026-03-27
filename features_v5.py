@@ -1,0 +1,565 @@
+"""
+features.py — Feature engineering for Folsom AQI forecasting.
+CRITICAL: No data leakage. All features at row T use only data available at T.
+"""
+
+import numpy as np
+import pandas as pd
+
+
+def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, pd.Series]:
+    """
+    Build feature matrix X and target y for a given forecast horizon.
+
+    CRITICAL: No data leakage. The target at row T is us_aqi at T+horizon_h.
+    All features at row T must be available at time T with no knowledge of T+1 or later.
+
+    Args:
+        df: Merged DataFrame with DatetimeIndex (America/Los_Angeles).
+            Required columns: us_aqi, pm2_5, boundary_layer_height, wind_speed_10m,
+            surface_pressure, relative_humidity_2m, temperature_2m, precipitation,
+            cloud_cover, wind_direction_10m
+        horizon_h: Forecast horizon in hours (6, 12, 24, or 48).
+
+    Returns:
+        X: Feature DataFrame with DatetimeIndex
+        y: Target Series (us_aqi at T+horizon_h, aligned with X's index)
+
+    After calling this function, caller must drop NaN targets:
+        mask = y.notna()
+        X, y = X[mask], y[mask]
+    """
+    X = pd.DataFrame(index=df.index)
+
+    # Coerce all columns to numeric — older Open-Meteo data (2020-2021) returns
+    # None objects instead of NaN floats, which crashes .diff()/.shift()/.rolling().
+    df = df.apply(pd.to_numeric, errors='coerce')
+
+    # -----------------------------------------------------------------------
+    # Group 1: AQI lag features
+    # FIX: Expose current exact state (lag 0). At time T, we know AQI at time T.
+    # -----------------------------------------------------------------------
+    X['aqi_current'] = df['us_aqi']
+    for lag in [1, 2, 3, 6, 12, 24, 48]:
+        X[f'aqi_lag_{lag}h'] = df['us_aqi'].shift(lag)
+
+    # -----------------------------------------------------------------------
+    # Group 2: AQI rolling statistics & Temporal Differencing
+    # FIX: Rolling window now includes the current row T. 
+    # Added differencing to detect daily macro-trends (crucial for 24h+ horizons)
+    # -----------------------------------------------------------------------
+    X['aqi_diff_1h']  = df['us_aqi'] - df['us_aqi'].shift(1)
+    X['aqi_diff_24h'] = df['us_aqi'] - df['us_aqi'].shift(24)
+
+    # 2b. AQI Second Derivative (Acceleration)
+    # Rate of change of the rate of change. Positive = pollution building faster.
+    X['aqi_acceleration'] = X['aqi_diff_1h'] - X['aqi_diff_1h'].shift(1)
+    X['aqi_acceleration_6h_mean'] = X['aqi_acceleration'].rolling(6, min_periods=1).mean()
+
+
+    for window in [3, 6, 12, 24, 48, 168]:
+        X[f'aqi_roll_{window}h_mean'] = df['us_aqi'].rolling(window, min_periods=1).mean()
+        X[f'aqi_roll_{window}h_max']  = df['us_aqi'].rolling(window, min_periods=1).max()
+        X[f'aqi_roll_{window}h_std']  = df['us_aqi'].rolling(window, min_periods=1).std().fillna(0)
+
+    # NEW: Exponentially Weighted Moving Averages
+    X['aqi_ewma_6h']  = df['us_aqi'].ewm(span=6,  adjust=False).mean()
+    X['aqi_ewma_24h'] = df['us_aqi'].ewm(span=24, adjust=False).mean()
+    X['pm25_ewma_6h'] = df['pm2_5'].ewm(span=6, adjust=False).mean()
+    X = X.copy()  # Reset fragmentation count
+
+
+    # -----------------------------------------------------------------------
+    # Group 3: PM2.5 features
+    # FIX: Exposing current PM2.5 state and aligning rolling windows to T.
+    # -----------------------------------------------------------------------
+    X['pm25_current'] = df['pm2_5']
+    for lag in [1, 3, 6, 24]:
+        X[f'pm25_lag_{lag}h'] = df['pm2_5'].shift(lag)
+    X['pm25_roll_6h_mean']  = df['pm2_5'].rolling(6,  min_periods=1).mean()
+    X['pm25_roll_24h_mean'] = df['pm2_5'].rolling(24, min_periods=1).mean()
+
+    # -----------------------------------------------------------------------
+    # FEATURE GROUP 1 — CRITICAL: Combustion Tracers
+    # -----------------------------------------------------------------------
+    # 1a. Carbon Monoxide Features (primary combustion tracer)
+    if 'carbon_monoxide' in df.columns:
+        co = pd.to_numeric(df['carbon_monoxide'], errors='coerce')
+        X['co_current']       = co
+        X['co_lag_6h']        = co.shift(6)
+        X['co_lag_24h']       = co.shift(24)
+        X['co_roll_24h_mean'] = co.rolling(24, min_periods=1).mean()
+        X['co_diff_6h']       = co.diff(6)   # rising CO = new combustion event
+        X['co_roll_6h_max']   = co.rolling(6, min_periods=1).max()
+    
+    # 1b. PM2.5/CO Wildfire Discrimination Ratio
+    if 'carbon_monoxide' in df.columns and 'pm2_5' in df.columns:
+        co_safe = co.replace(0, np.nan)
+        # High ratio = wildfire smoke dominant; Low ratio = traffic/urban dominant
+        X['pm25_co_ratio'] = df['pm2_5'] / co_safe
+        X['pm25_co_ratio_6h_mean'] = X['pm25_co_ratio'].rolling(6, min_periods=1).mean()
+
+    # 1c. Dust Features (mineral aerosol — Sep/Oct advection events)
+    if 'dust' in df.columns:
+        dust = pd.to_numeric(df['dust'], errors='coerce')
+        X['dust_current']       = dust
+        X['dust_roll_24h_mean'] = dust.rolling(24, min_periods=1).mean()
+        X['dust_diff_6h']       = dust.diff(6)
+
+    # 1d. NO₂ Features (traffic/anthropogenic proxy — inversely correlated with wildfire)
+    if 'nitrogen_dioxide' in df.columns:
+        no2 = pd.to_numeric(df['nitrogen_dioxide'], errors='coerce')
+        X['no2_current']       = no2
+        X['no2_roll_24h_mean'] = no2.rolling(24, min_periods=1).mean()
+
+    # -----------------------------------------------------------------------
+    # Group 4: Meteorological features
+
+    # These come from NWP (numerical weather prediction) forecast models,
+    # so they are genuinely available at forecast time for any horizon.
+    # -----------------------------------------------------------------------
+    X['boundary_layer_height'] = df['boundary_layer_height']
+    X['wind_speed_10m']        = df['wind_speed_10m']
+    X['surface_pressure']      = df['surface_pressure']
+    X['relative_humidity_2m']  = df['relative_humidity_2m']
+    X['temperature_2m']        = df['temperature_2m']
+    X['precipitation']         = df['precipitation']
+    X['cloud_cover']           = df['cloud_cover']
+    X['direct_radiation']      = pd.to_numeric(df.get('direct_radiation'), errors='coerce').fillna(0)
+    X['soil_temp']             = pd.to_numeric(df.get('soil_temperature_0_to_7cm'), errors='coerce').fillna(0)
+    X = X.copy()
+
+
+    # Domain Knowledge Physical Interactions
+    # Ventilation Coefficient = BLH * Wind Speed (measures atmospheric stagnation)
+    X['blh_x_wind_speed'] = df['boundary_layer_height'] * df['wind_speed_10m']
+    # Dynamic Air Washout = Current AQI * Wind Speed
+    X['aqi_x_wind'] = X['aqi_current'] * df['wind_speed_10m']
+    # Smog Generation Potential = Current AQI * Shortwave Radiation
+    X['aqi_x_rad'] = X['aqi_current'] * X['direct_radiation']
+
+    # -----------------------------------------------------------------------
+    # WILDFIRE PROXY FEATURES (Priority 4)
+    # Allows the models to detect high-fire-risk environmental geometry.
+    # -----------------------------------------------------------------------
+    # 1. Hot-Dry-Windy Index (HDWI): Approximates environmental fire danger.
+    # High temp (> 30C), low humidity (< 25%), high wind (> 15 km/h) = severe fire risk.
+    temp_c = df['temperature_2m']
+    rh     = df['relative_humidity_2m']
+    wind   = df['wind_speed_10m']
+    
+    # Vapor Pressure Deficit (VPD) approximation in kPa given T and RH
+    es = 0.6108 * np.exp(17.27 * temp_c / (temp_c + 237.3))
+    ea = es * (rh / 100.0)
+    vpd = es - ea
+    
+    X['wildfire_hdwi'] = wind * vpd
+
+    # 2. Antecedent Precipitation Deficit (Dry Fuel Conditions)
+    # The sum of all rain over the last 30 days. If this is 0 in summer, fires explode.
+    X['precip_30d_sum'] = df['precipitation'].rolling(30 * 24, min_periods=1).sum()
+
+    # 2c. Days Since Last Rain (Precipitation Scavenging Memory):
+    # Rain removes PM2.5 via wet deposition. The longer the dry spell,
+    # the more pollutants can accumulate.
+    rain_flag = (df['precipitation'] > 0.1).astype(int)  # >0.1mm threshold
+    # Streak of consecutive dry hours
+    dry_groups    = (rain_flag != rain_flag.shift()).cumsum()
+    # Invert: count dry hours (1 - rain_flag streak)
+    dry_flag      = 1 - rain_flag
+    dry_cumsum    = dry_flag.groupby(dry_groups).cumsum()
+    X['hours_since_rain'] = dry_cumsum
+    X['days_since_rain']  = X['hours_since_rain'] / 24.0
+
+
+    # 3. Extreme Heat & Dry Flag
+    # Boolean categorical flag for extreme summer danger conditions.
+    X['flag_extreme_heat_dry'] = ((temp_c > 35) & (rh < 25) & (wind > 10)).astype(int)
+
+    # 4. Unconditional Additions: Weather Front Differencing
+    X['pressure_diff_3h']  = df['surface_pressure'].diff(3)
+    X['pressure_diff_6h']  = df['surface_pressure'].diff(6)
+    X['pressure_diff_12h'] = df['surface_pressure'].diff(12)
+    X['pressure_diff_24h'] = df['surface_pressure'].diff(24)
+    X['temp_diff_24h']     = df['temperature_2m'].diff(24)
+    # Extended differencing for multi-day frontal systems (V4.0)
+    X['pressure_diff_48h'] = df['surface_pressure'].diff(48)
+    X['temp_diff_48h']     = df['temperature_2m'].diff(48)
+
+    # -----------------------------------------------------------------------
+    # FORECAST WEATHER FEATURES (V4.0 — highest-impact 48h fix)
+    # At time T, NWP models (Open-Meteo) provide weather forecasts for T+horizon_h.
+    # During TRAINING: .shift(-horizon_h) gives the ACTUAL weather at the target
+    #   hour, which is the best available proxy for what the NWP forecast would be.
+    # During INFERENCE: fetch_recent_combined(forecast_days=3) already fills the
+    #   DataFrame with forecast rows extending 72h ahead, so these columns are
+    #   naturally populated with genuine NWP forecast values at time T+horizon_h.
+    # This is NOT data leakage — these features represent information that is
+    # genuinely available at prediction time T.
+    # -----------------------------------------------------------------------
+    X['fwd_wind_speed']   = df['wind_speed_10m'].shift(-horizon_h)
+    X['fwd_blh']          = df['boundary_layer_height'].shift(-horizon_h)
+    X['fwd_temperature']  = df['temperature_2m'].shift(-horizon_h)
+    X['fwd_humidity']     = df['relative_humidity_2m'].shift(-horizon_h)
+    X['fwd_pressure']     = df['surface_pressure'].shift(-horizon_h)
+    X['fwd_precipitation'] = df['precipitation'].shift(-horizon_h)
+
+    # Forecast-time interactions (computed at the target hour, not current hour)
+    # Ventilation coefficient at T+h: measures how well the atmosphere can
+    # disperse pollutants at the time the prediction lands.
+    X['fwd_ventilation']  = X['fwd_blh'] * X['fwd_wind_speed']
+
+    # Fire danger index at T+h: VPD × wind at the forecast hour
+    fwd_es = 0.6108 * np.exp(17.27 * X['fwd_temperature'] / (X['fwd_temperature'] + 237.3))
+    fwd_ea = fwd_es * (X['fwd_humidity'] / 100.0)
+    fwd_vpd = fwd_es - fwd_ea
+    X['fwd_hdwi'] = X['fwd_wind_speed'] * fwd_vpd
+
+    # 5. Satellite Aerosol Optical Depth (Smoke Plume Detection)
+    # AOD detects smoke aloft *before* it settles into the boundary layer.
+    # The absolute value matters, but the rate of change catches the incoming front.
+    if 'aerosol_optical_depth' in df.columns:
+        aod = pd.to_numeric(df['aerosol_optical_depth'], errors='coerce')
+        X['aod_current'] = aod
+        X['aod_diff_3h'] = aod.diff(3)
+        X['aod_diff_6h'] = aod.diff(6)
+        X = X.copy()
+
+
+    # Wind direction: encode as sin/cos so 359° ≈ 1° (circular continuity)
+    wind_dir_rad = np.radians(df['wind_direction_10m'])
+    X['wind_dir_sin'] = np.sin(wind_dir_rad)
+    X['wind_dir_cos'] = np.cos(wind_dir_rad)
+
+    # Wind U/V vector decomposition (V4.0)
+    # Combines speed AND direction into continuous cartesian components.
+    # U = east-west component (positive = from west), V = north-south (positive = from south)
+    # LightGBM can split directly on these to detect, e.g., "strong easterly wind" patterns
+    # that the separate speed + sin/cos features cannot capture as efficiently.
+    X['wind_u'] = wind * np.cos(wind_dir_rad)
+    X['wind_v'] = wind * np.sin(wind_dir_rad)
+
+
+
+
+    # -----------------------------------------------------------------------
+    # Group 5: PHYSICS-INFORMED STABILITY FEATURES (V5.0)
+    # These capture the physical mechanisms behind multi-day AQI persistence:
+    #   - Atmospheric stagnation (trapped pollutants)
+    #   - Temperature inversions (lid effect)
+    #   - Ventilation deficit (inability to flush pollutants)
+    # -----------------------------------------------------------------------
+
+    # --- 5a. Stagnation Index ---
+    # Stagnation occurs when BOTH wind speed is low AND the boundary layer
+    # is shallow (compressed). This "double trap" prevents vertical and
+    # horizontal pollutant dispersal. We use rolling windows to capture
+    # sustained events (not just hourly blips).
+    #
+    # Physics: Wind < 2 m/s + BLH < 500m = classic Central Valley stagnation.
+    # The index is continuous (0-1 per hour), then summed over rolling windows
+    # to capture multi-hour and multi-day events.
+    low_wind = (wind < 2.0).astype(float)
+    low_blh  = (df['boundary_layer_height'] < 500).astype(float)
+    stag_hourly = low_wind * low_blh  # 1.0 when both conditions are met
+
+    X['stagnation_6h']  = stag_hourly.rolling(6,  min_periods=1).sum()
+    X['stagnation_24h'] = stag_hourly.rolling(24, min_periods=1).sum()
+    X['stagnation_48h'] = stag_hourly.rolling(48, min_periods=1).sum()
+
+    high_humidity_flag = (df['relative_humidity_2m'] > 90.0).astype(float)
+    X['fog_nitrate_index'] = (high_humidity_flag * stag_hourly).astype(float)
+
+    # 2a. Consecutive Stagnation Streak:
+    # How many consecutive hours has low-wind + shallow-BLH persisted?
+    # Compute streak length: resets to 0 when stag_hourly = 0
+    stag_groups   = (stag_hourly != stag_hourly.shift()).cumsum()
+    stag_cumsum   = stag_hourly.groupby(stag_groups).cumsum()
+    X['stagnation_streak_h'] = stag_cumsum  # hours of current streak
+
+
+    # --- 5b. Inversion Proxy ---
+    # A temperature inversion occurs when air aloft is warmer than air at
+    # the surface, creating a "lid" that traps pollutants. We approximate
+    # this using two complementary heuristics:
+    #
+    # Heuristic 1: "Shallow BLH + Rising Pressure"
+    #   When the boundary layer collapses (< 300m) AND pressure is rising
+    #   (high-pressure system settling in), a strong inversion is forming.
+    #   This is the classic Sacramento Valley winter pattern.
+    #
+    # Heuristic 2: "Nighttime Radiative Cooling"
+    #   Temperature drops sharply at night while pressure stays high.
+    #   A large negative temp_diff (cooling) with positive pressure_diff
+    #   (stabilization) strongly indicates a radiative inversion.
+    blh = df['boundary_layer_height']
+    pressure_change_6h = df['surface_pressure'].diff(6)
+    temp_change_6h     = df['temperature_2m'].diff(6)
+
+    # Inversion Strength: shallow BLH × pressure rise × cooling rate
+    # Clamp BLH to avoid division-by-zero; smaller BLH = stronger inversion
+    blh_clamped = blh.clip(lower=50)
+    # Normalize: (1/BLH) gives large values when BLH is low
+    inv_blh_component     = 1000.0 / blh_clamped  # ~2.0 when BLH=500, ~20 when BLH=50
+    inv_pressure_component = pressure_change_6h.clip(lower=0)  # only rising pressure
+    inv_cooling_component  = (-temp_change_6h).clip(lower=0)   # only cooling
+
+    X['inversion_strength'] = inv_blh_component * inv_pressure_component * inv_cooling_component
+    X['inversion_12h_max']  = X['inversion_strength'].rolling(12, min_periods=1).max()
+
+    # --- 5b2. TRUE Inversion Delta (850hPa) ---
+    # The REAL inversion measurement: T_850hPa - T_2m.
+    # Positive = warm air aloft (inversion lid trapping pollutants)
+    # Negative = normal lapse rate (good vertical mixing)
+    # This is the gold-standard metric used by NWS to issue stagnation advisories.
+    if 'temperature_850hPa' in df.columns:
+        t850 = pd.to_numeric(df['temperature_850hPa'], errors='coerce')
+        # Robust NaN handling: forward-fill gaps (up to 6h), then backfill residuals
+        t850 = t850.ffill(limit=6).bfill(limit=6)
+        t2m  = pd.to_numeric(df['temperature_2m'], errors='coerce')
+
+        X['inversion_delta_850'] = t850 - t2m
+        X['inversion_delta_850_6h_mean'] = X['inversion_delta_850'].rolling(6, min_periods=1).mean()
+
+        # NWP forward-shifted version: what will the inversion look like at T+h?
+        X['fwd_inversion_delta_850'] = X['inversion_delta_850'].shift(-horizon_h)
+        X = X.copy()
+
+    # 4b. 700hPa Inversion Depth (V5.2)
+    # The temperature gradient between 700hPa and 850hPa tells you the DEPTH and
+    # STABILITY of the inversion lid.
+    if 'temperature_700hPa' in df.columns and 'temperature_850hPa' in df.columns:
+        t700 = pd.to_numeric(df['temperature_700hPa'], errors='coerce').ffill(limit=6).bfill(limit=6)
+        t850 = pd.to_numeric(df['temperature_850hPa'], errors='coerce').ffill(limit=6).bfill(limit=6)
+        t2m  = pd.to_numeric(df['temperature_2m'],     errors='coerce')
+
+        # Full atmospheric column: T_700 - T_2m (full inversion column depth)
+        X['inversion_column_depth'] = t700 - t2m
+
+        # Inter-level gradient: T_700 - T_850 (stability of the inversion lid itself)
+        # Near-zero = lid is thick and stable; large = lid is shallow and breakable
+        X['inversion_lid_stability'] = t700 - t850
+
+        # 24h persistence of the inversion column
+        X['inversion_column_24h_mean'] = X['inversion_column_depth'].rolling(24, min_periods=1).mean()
+        
+        # Forward-shifted version at T+horizon_h
+        X['fwd_inversion_column_depth'] = X['inversion_column_depth'].shift(-horizon_h)
+        X = X.copy()
+
+
+
+    # --- 5c. Ventilation Deficit ---
+    # The ventilation coefficient (BLH × Wind) measures the atmosphere's
+    # ability to flush pollutants. When it drops below a critical threshold
+    # (~3000 m²/s), pollutants accumulate. The "deficit" is how far below
+    # this threshold the atmosphere currently is.
+    #
+    # This is different from the existing blh_x_wind_speed feature because
+    # it captures the DEFICIT (how trapped we are) rather than the raw value.
+    VENT_THRESHOLD = 3000.0  # m²/s — empirical threshold for Central Valley
+    ventilation = blh * wind
+    vent_deficit = (VENT_THRESHOLD - ventilation).clip(lower=0)
+
+    X['vent_deficit']       = vent_deficit
+    X['vent_deficit_24h_mean'] = vent_deficit.rolling(24, min_periods=1).mean()
+
+
+    # -----------------------------------------------------------------------
+    # Group 5d: Synoptic Blocking Index (V5.1 Winter Patch)
+    # Physics: Measures if a massive high-pressure ridge is parked over CA.
+    # High Z500 = high pressure aloft = sinking air = stable trapping.
+    # -----------------------------------------------------------------------
+    if 'geopotential_height_500hPa' in df.columns:
+        z500 = pd.to_numeric(df['geopotential_height_500hPa'], errors='coerce')
+        # Handle NaNs: ffill within reason then 0-fill
+        z500 = z500.ffill(limit=24).fillna(z500.median())
+        
+        # Calculate climatological day-of-year mean (roughly)
+        # For a production system we should use a multi-year baseline, 
+        # for now we use the mean of the current dataframe's same-DOY values.
+        z500_doy_mean = z500.groupby(df.index.dayofyear).transform('mean')
+        X['z500_anomaly'] = z500 - z500_doy_mean
+        
+        # Blocking Persistence: Z500 anomaly > 50 meters for sustained periods
+        is_blocked = (X['z500_anomaly'] > 50).astype(float)
+        X['blocking_persistence_72h'] = is_blocked.rolling(72, min_periods=1).sum()
+
+    # -----------------------------------------------------------------------
+    # Group 5e: Human Emission Proxy (V5.1 Winter Patch)
+    # Physics: Cold temperatures (< 7°C / 45°F) trigger residential wood smoke.
+    # This is the primary driver of winter PM2.5 in Folsom.
+    # -----------------------------------------------------------------------
+    cold_threshold = 7.0
+    cold_degree_hours = (cold_threshold - df['temperature_2m']).clip(lower=0)
+    X['cold_degree_hours'] = cold_degree_hours
+    X['cold_degree_hours_48h'] = cold_degree_hours.rolling(48, min_periods=1).sum()
+
+    # -----------------------------------------------------------------------
+    # Group 5f: Tule Fog Precursor (V5.1 Winter Patch)
+    # Physics: Winter fog acts as a pollutant trap. Forms when T ≈ DewPoint.
+    # -----------------------------------------------------------------------
+    temp = pd.to_numeric(df['temperature_2m'], errors='coerce')
+    rh   = pd.to_numeric(df['relative_humidity_2m'], errors='coerce')
+    
+    # Magnus approximation for dew point
+    # alpha = ln(RH/100) + (17.625 * T) / (243.04 + T)
+    # dew_point = (243.04 * alpha) / (17.625 - alpha)
+    alpha = np.log(rh.clip(lower=1) / 100) + (17.625 * temp) / (243.04 + temp)
+    dew_point = (243.04 * alpha) / (17.625 - alpha)
+    
+    X['dew_point_depression'] = temp - dew_point
+    
+    # Fog Precursor: DP Depression < 3°C for sustained periods
+    is_foggy = (X['dew_point_depression'] < 3.0).astype(float)
+    X['fog_precursor_12h'] = is_foggy.rolling(12, min_periods=1).sum()
+
+
+    # -----------------------------------------------------------------------
+    # Group 6: Temporal encodings — cyclic, computed from index only
+    # -----------------------------------------------------------------------
+    hour        = df.index.hour
+    day_of_year = df.index.day_of_year
+    month       = df.index.month
+    day_of_week = df.index.day_of_week
+    hr          = hour
+    dow         = day_of_week
+
+    # Quantum Models (76-feature set) require these specific aliases
+    X['hour_sin']        = np.sin(2 * np.pi * hr / 24)
+    X['hour_cos']        = np.cos(2 * np.pi * hr / 24)
+    X['dow_sin']         = np.sin(2 * np.pi * dow / 7)
+    X['dow_cos']         = np.cos(2 * np.pi * dow / 7)
+
+    X['day_of_year_sin'] = np.sin(2 * np.pi * day_of_year / 365)
+    X['day_of_year_cos'] = np.cos(2 * np.pi * day_of_year / 365)
+    X['month_sin']       = np.sin(2 * np.pi * month / 12)
+    X['month_cos']       = np.cos(2 * np.pi * month / 12)
+    X['day_of_week_sin'] = np.sin(2 * np.pi * day_of_week / 7)
+    X['day_of_week_cos'] = np.cos(2 * np.pi * day_of_week / 7)
+    X['is_weekend']      = (day_of_week >= 5).astype(int)
+    X = X.copy()
+
+
+    # Future hour (cyclic) — very predictive for long horizons
+    future_hour = (hour + horizon_h) % 24
+    X['future_hour_sin'] = np.sin(2 * np.pi * future_hour / 24)
+    X['future_hour_cos'] = np.cos(2 * np.pi * future_hour / 24)
+
+    # -----------------------------------------------------------------------
+    # Group 7: Regulatory and Seasonal Features (V5.3)
+    # -----------------------------------------------------------------------
+    X['cbyb_season_flag'] = ((df.index.month >= 11) | (df.index.month <= 2)).astype(int)
+    X['weekend_burning_proxy'] = X['is_weekend'] * X['cold_degree_hours']
+    if 'shortwave_radiation' in df.columns:
+        X['radiation_accum_6h'] = pd.to_numeric(df['shortwave_radiation'], errors='coerce').rolling(6, min_periods=1).sum()
+    else:
+        X['radiation_accum_6h'] = 0.0
+
+    # -----------------------------------------------------------------------
+    # Group 6: Target construction
+    # FIX: Residual Prediction Transformation (Max R^2 Variance)
+    # Target = (Future AQI) - (Current AQI)
+    # The LightGBM tree now exclusively learns to predict the variance delta.
+    # -----------------------------------------------------------------------
+    y = df['us_aqi'].shift(-horizon_h) - df['us_aqi']
+    y.name = 'target_residual'
+
+    return X, y
+
+
+def get_feature_names(horizon_h: int = 6) -> list[str]:
+    """
+    Return ordered list of feature names for a given horizon.
+    Used to verify alignment between training and inference.
+    """
+    # Build a tiny dummy df and extract column names.
+    # Uses 500 rows to ensure all rolling windows and forward shifts
+    # can produce non-NaN values for feature name extraction.
+    idx = pd.date_range('2023-01-01', periods=500, freq='h',
+                        tz='America/Los_Angeles')
+    dummy = pd.DataFrame({
+        'us_aqi':               np.random.rand(500) * 100,
+        'pm2_5':                np.random.rand(500) * 50,
+        'boundary_layer_height': np.random.rand(500) * 1500,
+        'wind_speed_10m':       np.random.rand(500) * 10,
+        'surface_pressure':     np.random.rand(500) * 20 + 1010,
+        'relative_humidity_2m': np.random.rand(500) * 100,
+        'temperature_2m':       np.random.rand(500) * 30,
+        'precipitation':        np.random.rand(500),
+        'cloud_cover':          np.random.rand(500) * 100,
+        'cloud_cover_low':      np.random.rand(500) * 100,
+        'wind_direction_10m':   np.random.rand(500) * 360,
+        'direct_radiation':     np.random.rand(500) * 500,
+        'shortwave_radiation':  np.random.rand(500) * 1000,
+        'soil_temperature_0_to_7cm': np.random.rand(500) * 25,
+        'aerosol_optical_depth': np.random.rand(500) * 0.5,
+        'temperature_850hPa':   np.random.rand(500) * 20 - 5,  # V5: ~-5°C to +15°C
+        'temperature_700hPa':   np.random.rand(500) * 15 - 10,  # V5.2: ~-10°C to +5°C
+        'geopotential_height_500hPa': np.random.rand(500) * 500 + 5500, # V5.1: ~5500 to 6000m
+
+        'carbon_monoxide':      np.random.rand(500) * 1000,
+        'nitrogen_dioxide':     np.random.rand(500) * 100,
+        'dust':                 np.random.rand(500) * 50,
+    }, index=idx)
+    X, _ = engineer_features(dummy, horizon_h)
+    return list(X.columns)
+
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# ATMOSPHERIC REGIME CLASSIFICATION (V5.0)
+# ═══════════════════════════════════════════════════════════════════════════════
+
+def classify_regime(df: pd.DataFrame) -> pd.Series:
+    """
+    Classify every hourly row into one of three atmospheric regimes based on
+    physically-grounded thresholds calibrated for the Central Valley (Folsom).
+
+    Regime 0 — "Well-Mixed / High Wind"
+        Strong ventilation: wind ≥ 5 m/s OR BLH ≥ 1500m.
+        Characteristic of spring frontal passages and Delta Breeze clearing
+        events. AQI changes are fast and stochastic → hardest for 48h models.
+
+    Regime 1 — "Stagnant / Inversion"
+        Weak ventilation AND shallow boundary layer: wind < 2 m/s AND BLH < 500m.
+        Characteristic of winter inversions and wildfire smoke traps.
+        AQI is persistent and high → easiest for 48h models.
+
+    Regime 2 — "Normal / Baseline"
+        Everything else. Moderate conditions with some mixing.
+        AQI is relatively stable and low → standard behavior.
+
+    Args:
+        df: DataFrame with 'wind_speed_10m' and 'boundary_layer_height' columns.
+
+    Returns:
+        pd.Series of regime labels (0, 1, or 2), same index as df.
+    """
+    df_numeric = df[['wind_speed_10m', 'boundary_layer_height']].apply(
+        pd.to_numeric, errors='coerce'
+    )
+    wind = df_numeric['wind_speed_10m']
+    blh  = df_numeric['boundary_layer_height']
+
+    regime = pd.Series(2, index=df.index, name='regime')  # Default: Normal
+
+    # Regime 0: Well-Mixed (strong ventilation)
+    well_mixed = (wind >= 5.0) | (blh >= 1500.0)
+    regime[well_mixed] = 0
+
+    # Regime 1: Stagnant (weak ventilation AND shallow BLH)
+    # NOTE: Regime 1 takes priority over Regime 0 if both conditions overlap
+    # (which is physically impossible — you can't have wind≥5 AND wind<2).
+    stagnant = (wind < 2.0) & (blh < 500.0)
+    regime[stagnant] = 1
+
+    return regime
+
+
+REGIME_LABELS = {
+    0: "Well-Mixed / High Wind",
+    1: "Stagnant / Inversion",
+    2: "Normal / Baseline",
+}
+

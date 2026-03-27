@@ -31,7 +31,7 @@ CACHE_MAX_AGE_SECONDS = 7200  # 2 hours
 
 AQ_ENDPOINT      = "https://air-quality-api.open-meteo.com/v1/air-quality"
 WEATHER_ENDPOINT = "https://api.open-meteo.com/v1/forecast"
-ARCHIVE_ENDPOINT = "https://archive-api.open-meteo.com/v1/archive"
+ARCHIVE_ENDPOINT = "https://historical-forecast-api.open-meteo.com/v1/forecast"
 AIRNOW_ENDPOINT  = "https://www.airnowapi.org/aq/observation/latLong/current/"
 
 AQ_VARS = [
@@ -43,7 +43,11 @@ WEATHER_VARS = [
     "temperature_2m", "relative_humidity_2m", "wind_speed_10m",
     "wind_direction_10m", "surface_pressure", "boundary_layer_height",
     "precipitation", "cloud_cover", "visibility", "direct_radiation",
-    "soil_temperature_0_to_7cm"
+    "shortwave_radiation", "cloud_cover_low",
+    "soil_temperature_0_to_7cm",
+    "temperature_850hPa",  # V5: Upper-atmosphere temp for inversion detection
+    "temperature_700hPa",   # V5.2: For inversion depth (700-850hPa gradient)
+    "geopotential_height_500hPa",  # V5.1: Synoptic blocking ridges
 ]
 
 
@@ -191,7 +195,7 @@ def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
     """
     _ensure_cache_dir()
     past_days = max(1, (past_hours // 24) + 1)
-    tag       = f"recent_combined_pd{past_days}"
+    tag       = f"recent_combined_ph{past_hours}"
     cache     = _cache_key(tag)
 
     if _cache_is_fresh(cache):
@@ -276,10 +280,10 @@ def fetch_airnow_current() -> dict | None:
 
 def fetch_full_history() -> pd.DataFrame:
     """
-    Fetch 2+ years of merged AQ + weather data for training.
+    Fetch 4 years of merged AQ + weather data for training.
     Splits into yearly chunks to stay within API limits.
     """
-    start = "2020-01-01" # was "2022-01-01"
+    start = "2021-01-01" 
     end   = datetime.now().strftime("%Y-%m-%d")
 
     aq_frames, wx_frames = [], []
