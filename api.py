@@ -115,40 +115,12 @@ async def health():
 async def get_forecast():
     """
     Return the cached AQI forecast JSON.
-
-    If the cache is older than 90 minutes, triggers a synchronous refresh
-    before returning (this takes ~5-10 seconds but keeps data fresh even if
-    the cron job fails).
-
-    Response time target: < 200ms when cache is warm.
+    Always pulls from the GitHub CDN (data-cache branch) to bypass
+    Render IP rate limits.
     """
-    age = cache_age_minutes()
-
-    # If cache is stale (or missing), refresh synchronously
-    if age > 90:
-        print(f"[api] Cache is {age} min old — refreshing synchronously...", file=sys.stderr)
-        try:
-            result = predict_now()
-            return JSONResponse(content=result)
-        except Exception as exc:
-            # If refresh fails, try returning whatever is cached
-            print(f"[api] Refresh failed: {exc}", file=sys.stderr)
-            cached = load_cached_forecast()
-            if cached:
-                cached["_stale_warning"] = f"Cache is {age} min old; refresh failed: {exc}"
-                return JSONResponse(content=cached, status_code=200)
-            raise HTTPException(status_code=503, detail=f"No forecast available: {exc}")
-
-    # Serve from cache (fast path)
-    cached = load_cached_forecast()
+    cached = load_cached_forecast(prefer_remote=True)
     if cached is None:
-        # No cache at all — first-run scenario
-        print("[api] No cache found — generating first forecast...", file=sys.stderr)
-        try:
-            result = predict_now()
-            return JSONResponse(content=result)
-        except Exception as exc:
-            raise HTTPException(status_code=503, detail=f"Failed to generate forecast: {exc}")
+        raise HTTPException(status_code=503, detail="No forecast data available from CDN or local cache.")
 
     return JSONResponse(content=cached)
 
@@ -156,19 +128,22 @@ async def get_forecast():
 @app.get("/refresh")
 async def trigger_refresh():
     """
-    Manually trigger a forecast refresh. Called by cron every hour.
-    Also useful for testing immediately after deployment.
-    Returns confirmation with the generated_at timestamp.
+    Manually trigger a forecast fetch from the CDN.
+    Note: Live recalculation is disabled on Render to avoid 429s.
+    Recalculation happens automatically via GitHub Actions every hour.
     """
     try:
-        result = predict_now()
+        result = load_cached_forecast(prefer_remote=True)
+        if not result:
+            raise RuntimeError("Could not fetch remote cache.")
         return {
-            "refreshed":     True,
-            "generated_at":  result.get("generated_at"),
-            "data_freshness_minutes": result.get("data_freshness_minutes"),
+            "refreshed":      True,
+            "source":         "GitHub CDN (data-cache)",
+            "generated_at":   result.get("generated_at"),
+            "data_freshness": result.get("data_freshness_minutes"),
         }
     except Exception as exc:
-        raise HTTPException(status_code=500, detail=f"Refresh failed: {exc}")
+        raise HTTPException(status_code=500, detail=f"Remote refresh failed: {exc}")
 
 
 @app.get("/current")

@@ -1,0 +1,58 @@
+name: Refresh AQI Forecast Data
+
+on:
+  schedule:
+    - cron: '0 * * * *'  # Run every hour
+  workflow_dispatch:      # Allow manual trigger
+
+jobs:
+  refresh:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout main
+        uses: actions/checkout@v4
+        with:
+          ref: main
+
+      - name: Set up Python 3.10
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.10'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+
+      - name: Refresh Data
+        env:
+          AIRNOW_API_KEY: ${{ secrets.AIRNOW_API_KEY }}
+          GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+        run: python refresh.py
+
+      - name: Push to data-cache branch
+        run: |
+          git config --global user.name "github-actions[bot]"
+          git config --global user.email "github-actions[bot]@users.noreply.github.com"
+          
+          # Create and switch to orphan data-cache branch if it doesn't exist
+          # Or just checkout and update if it does
+          mkdir -p temp_cache
+          cp data/latest.json temp_cache/
+          
+          git fetch origin data-cache || true
+          git checkout data-cache || git checkout --orphan data-cache
+          
+          # Clear the branch and add only the latest.json
+          git rm -rf . || true
+          mkdir -p data
+          cp temp_cache/latest.json data/latest.json
+          git add data/latest.json
+          
+          if [ -n "$(git status --porcelain)" ]; then
+            git commit -m "Update cache: $(date -u)"
+            git push origin data-cache --force
+          else
+            echo "No changes to commit"
+          fi

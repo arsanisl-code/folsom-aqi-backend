@@ -18,6 +18,7 @@ import pandas as pd
 from data_fetcher import fetch_recent_combined, fetch_airnow_current
 from features import engineer_features
 from ai_layer import generate_summary
+import requests
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
@@ -421,8 +422,33 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
     return history[-72:]
 
 
-def load_cached_forecast() -> dict | None:
-    """Return the cached forecast from disk, or None if unavailable."""
+def load_remote_forecast() -> dict | None:
+    """Fetch the latest.json from the GitHub data-cache branch (the CDN)."""
+    # Placeholder strings to be filled by the user or final sed command
+    OWNER = "arsanisl-code"
+    REPO  = "folsom-aqi-backend"
+    URL   = f"https://raw.githubusercontent.com/{OWNER}/{REPO}/data-cache/data/latest.json"
+    
+    try:
+        resp = requests.get(URL, timeout=10)
+        if resp.status_code == 200:
+            return resp.json()
+    except Exception as exc:
+        print(f"[inference] Remote CDN fetch failed: {exc}", file=sys.stderr)
+    return None
+
+
+def load_cached_forecast(prefer_remote: bool = True) -> dict | None:
+    """
+    Return the cached forecast. 
+    By default, tries the GitHub CDN first (to avoid Render disk staleness).
+    Falls back to local data/latest.json if remote fails or prefer_remote=False.
+    """
+    if prefer_remote:
+        remote = load_remote_forecast()
+        if remote:
+            return remote
+
     if CACHE_FILE.exists():
         try:
             return json.loads(CACHE_FILE.read_text())
