@@ -1,0 +1,33 @@
+{
+  "trained_at": "2026-03-26T20:03:01.524108",
+  "horizons": [
+    {
+      "horizon_h": 6,
+      "val_mae": 2.02,
+      "val_r2": 0.959,
+      "val_coverage": 96.1,
+      "avg_width": 15.1
+    },
+    {
+      "horizon_h": 12,
+      "val_mae": 3.91,
+      "val_r2": 0.86,
+      "val_coverage": 95.7,
+      "avg_width": 25.2
+    },
+    {
+      "horizon_h": 24,
+      "val_mae": 7.66,
+      "val_r2": 0.486,
+      "val_coverage": 97.7,
+      "avg_width": 42.6
+    },
+    {
+      "horizon_h": 48,
+      "val_mae": 9.82,
+      "val_r2": 0.132,
+      "val_coverage": 98.2,
+      "avg_width": 58.7
+    }
+  ]
+}

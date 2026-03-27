@@ -1,0 +1,121 @@
+{
+  "feature_importance_48h": {
+    "horizon_h": 48,
+    "lag0_gain_pct": 1.7,
+    "lag0_features": [
+      "aqi_current"
+    ],
+    "top_features": [
+      {
+        "name": "day_of_year_sin",
+        "gain_pct": 4.7
+      },
+      {
+        "name": "day_of_year_cos",
+        "gain_pct": 4.35
+      },
+      {
+        "name": "aqi_roll_168h_mean",
+        "gain_pct": 4.34
+      },
+      {
+        "name": "aqi_roll_168h_std",
+        "gain_pct": 4.02
+      },
+      {
+        "name": "precip_30d_sum",
+        "gain_pct": 3.62
+      },
+      {
+        "name": "surface_pressure",
+        "gain_pct": 3.4
+      },
+      {
+        "name": "pressure_diff_24h",
+        "gain_pct": 3.17
+      },
+      {
+        "name": "aqi_roll_168h_max",
+        "gain_pct": 2.73
+      },
+      {
+        "name": "aqi_roll_48h_std",
+        "gain_pct": 2.57
+      },
+      {
+        "name": "aqi_lag_48h",
+        "gain_pct": 2.55
+      },
+      {
+        "name": "aqi_roll_48h_mean",
+        "gain_pct": 2.35
+      },
+      {
+        "name": "aqi_diff_24h",
+        "gain_pct": 2.13
+      },
+      {
+        "name": "pm25_roll_24h_mean",
+        "gain_pct": 2.1
+      },
+      {
+        "name": "aqi_roll_24h_std",
+        "gain_pct": 2.08
+      },
+      {
+        "name": "temp_diff_24h",
+        "gain_pct": 1.98
+      },
+      {
+        "name": "pressure_diff_12h",
+        "gain_pct": 1.96
+      },
+      {
+        "name": "dow_sin",
+        "gain_pct": 1.81
+      },
+      {
+        "name": "aqi_lag_24h",
+        "gain_pct": 1.8
+      },
+      {
+        "name": "aqi_roll_48h_max",
+        "gain_pct": 1.76
+      },
+      {
+        "name": "aqi_current",
+        "gain_pct": 1.71
+      }
+    ]
+  },
+  "residuals_12h": {
+    "horizon_h": 12,
+    "mae": 4.03,
+    "bias": -0.35,
+    "std": 5.17,
+    "skewness": 0.216,
+    "kurtosis": 0.369,
+    "coverage": 85.4,
+    "ci_width": 17.4,
+    "fat_tails": false,
+    "p99_p50_ratio": 4.3,
+    "pct_above_3sigma": 0.3,
+    "failures_below": 95,
+    "failures_above": 115
+  },
+  "residuals_48h": {
+    "horizon_h": 48,
+    "mae": 9.99,
+    "bias": 1.12,
+    "std": 12.31,
+    "skewness": 0.388,
+    "kurtosis": -0.302,
+    "coverage": 92.5,
+    "ci_width": 42.8,
+    "fat_tails": false,
+    "p99_p50_ratio": 3.7,
+    "pct_above_3sigma": 0.0,
+    "failures_below": 30,
+    "failures_above": 78
+  }
+}

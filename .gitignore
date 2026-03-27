@@ -1,0 +1,21 @@
+# .gitignore für Folsom AQI Backend
+
+# 1. Private / Sensitive
+.env
+
+# 2. Large Data Files (Keep repo under GitHub limits)
+data/*.parquet
+data/*.csv
+data/cache/
+
+# 3. Python Junk
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# 4. OS/IDE Junk
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
