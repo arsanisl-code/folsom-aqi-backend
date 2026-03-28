@@ -39,7 +39,7 @@ smoke detection), wildfire proxy features (Hot-Dry-Windy Index, Vapor \
 Pressure Deficit, antecedent precipitation deficit), pressure front \
 differencing, and cyclical time encodings. Models use Huber loss for \
 robustness to wildfire smoke spikes. Quantile models (1st and 99th \
-percentile) provide confidence intervals. Training data spans 2022–present \
+percentile) provide confidence intervals. Training data spans 2021–2026 \
 from Open-Meteo and AirNow sensor networks. Walk-forward validation over the \
 last 30 days is used to generate honest accuracy estimates.
 

@@ -214,7 +214,7 @@ def analyze_residuals(df: pd.DataFrame, horizon_h: int = 12):
     if fat_tail:
         print(f"\n  ⚠ FAT TAILS DETECTED:")
         print(f"    Excess kurtosis = {kurtosis:.2f} (normal=0) → errors have heavy tails")
-        print(f"    The q01/q99 quantile models are fitting the BULK of the distribution")
+        print(f"    The q05/q95 quantile models are fitting the BULK of the distribution")
         print(f"    but miss the EXTREME tails, producing intervals that are too narrow.")
     else:
         print(f"\n  ✓ Tail distribution appears near-normal.")
@@ -453,7 +453,7 @@ def main():
   │ RECOMMENDATION 1: Fix 12h Coverage (84.7% → ≥90%)                 │
   ├─────────────────────────────────────────────────────────────────────┤
   │                                                                     │
-  │ Root cause: Fat-tailed error distribution. The q01/q99 quantile    │
+  │ Root cause: Fat-tailed error distribution. The q05/q95 quantile    │
   │ models learn the central mass but underestimate extreme events.     │
   │                                                                     │
   │ Fix A — Coverage-aware Optuna objective (tune.py):                 │
@@ -469,7 +469,7 @@ def main():
   │   marginal coverage without retraining.                            │
   │                                                                     │
   │ Fix C — Widen quantile alphas:                                     │
-  │   Train q01→q005 (α=0.005) and q99→q995 (α=0.995).              │
+  │   Train q05→q005 (α=0.005) and q95→q995 (α=0.995).              │
   │   Wider native quantiles capture more tail mass automatically.     │
   │                                                                     │
   └─────────────────────────────────────────────────────────────────────┘

@@ -23,7 +23,7 @@ from features import engineer_features
 MODELS_DIR = Path("models")
 DATA_DIR = Path("data")
 HORIZONS = [6, 12, 24, 48]
-MODEL_TYPES = ["point", "q01", "q99"]
+MODEL_TYPES = ["point", "q05", "q95"]
 
 # Backtest Overrides
 TRAIN_START = "2020-01-01"
