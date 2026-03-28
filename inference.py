@@ -221,22 +221,28 @@ def predict_now() -> dict:
             regime_series = classify_regime(df)
             if now_ts in regime_series.index:
                 val = regime_series.loc[now_ts]
-                curr_regime = val.iloc[0] if isinstance(val, pd.Series) else val
+                curr_regime = int(val.iloc[0]) if isinstance(val, pd.Series) else int(val)
             else:
-                curr_regime = regime_series.iloc[-1]
+                curr_regime = int(regime_series.iloc[-1])
+            
+            # Injecting the column explicitly into X_now to prevent KeyError in selection
+            X_now['regime'] = pd.Categorical([curr_regime], categories=[0, 1, 2])
                 
             def prep_for_model(model_obj, X_raw):
+                # Now that 'regime' is in X_now, simple slicing works
                 X_sub = X_raw[model_obj.feature_name_]
+                
+                # imputer expects only continuous features (not 'regime')
                 if 'regime' in X_sub.columns:
                     X_cont = X_sub.drop(columns=['regime'])
                 else:
                     X_cont = X_sub
-                # Handle possible imputer mismatch (if model has 76 but imputer was fit on 74)
+
                 try:
                     X_imp = imputer.transform(X_cont)
                     X_df = pd.DataFrame(X_imp, columns=X_cont.columns, index=X_raw.index)
                 except ValueError:
-                    # Fallback for older V4 quantile models if they are loaded accidentally
+                    # Fallback for imputer mismatch
                     imp_names = imputer.feature_names_in_ if hasattr(imputer, 'feature_names_in_') else X_cont.columns
                     X_for_imp = X_cont[imp_names]
                     X_imp = imputer.transform(X_for_imp)
@@ -245,8 +251,10 @@ def predict_now() -> dict:
                         if c not in X_df.columns:
                             X_df[c] = X_cont[c].values
 
+                # Re-attach categorical 'regime' if required by the model
                 if 'regime' in model_obj.feature_name_:
-                    X_df['regime'] = pd.Categorical([curr_regime] * len(X_df), categories=[0, 1, 2])
+                    X_df['regime'] = X_raw['regime']
+                
                 return X_df[model_obj.feature_name_]
 
             X_pt_df = prep_for_model(point, X_now)
@@ -366,9 +374,16 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
         q05_6     = m6["q05"]
         q95_6     = m6["q95"]
 
-        X_window = X_hist[(X_hist.index > cutoff) & (X_hist.index <= now_ts)]
+        X_window = X_hist[(X_hist.index > cutoff) & (X_hist.index <= now_ts)].copy()
 
         if len(X_window) > 0:
+            # Inject regime categorical for the 72h window
+            regime_series = classify_regime(df)
+            X_window['regime'] = pd.Categorical(
+                regime_series.reindex(X_window.index).fillna(2).astype(int),
+                categories=[0, 1, 2]
+            )
+            
             # 1. Align/Impute for Point Model (74)
             X_pt     = X_window[pt6.feature_name_]
             X_pt_imp = imp6.transform(X_pt)
