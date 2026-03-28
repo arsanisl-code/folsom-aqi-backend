@@ -384,27 +384,33 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
                 categories=[0, 1, 2]
             )
             
-            # 1. Align/Impute for Point Model (74)
-            X_pt     = X_window[pt6.feature_name_]
-            X_pt_imp = imp6.transform(X_pt)
-            preds    = pt6.predict(X_pt_imp) + X_window['aqi_current'].values
+            # Helper: impute continuous features, re-attach regime, predict
+            def _hist_predict(model_obj, X_src):
+                feats = model_obj.feature_name_
+                X_sel = X_src[feats].copy()
+                # Strip regime before imputer (imputer only knows continuous cols)
+                if 'regime' in X_sel.columns:
+                    regime_col = X_sel['regime'].copy()
+                    X_cont = X_sel.drop(columns=['regime'])
+                else:
+                    regime_col = None
+                    X_cont = X_sel
+
+                X_imp = pd.DataFrame(
+                    imp6.transform(X_cont),
+                    columns=X_cont.columns, index=X_src.index
+                )
+                # Re-attach regime if the model needs it
+                if regime_col is not None and 'regime' in feats:
+                    X_imp['regime'] = regime_col.values
+                return model_obj.predict(X_imp[feats])
+
+            # 1. Point predictions
+            preds = _hist_predict(pt6, X_window) + X_window['aqi_current'].values
             
-            # 2. Align/Impute for Quantiles (76)
-            try:
-                # Direct transform if imputer matches features (76)
-                q05s = q05_6.predict(imp6.transform(X_window[q05_6.feature_name_])) + X_window['aqi_current'].values
-                q95s = q95_6.predict(imp6.transform(X_window[q95_6.feature_name_])) + X_window['aqi_current'].values
-            except Exception:
-                # Subset imputer (74) then merge
-                imp_names = pt6.feature_name_
-                X_imputed = pd.DataFrame(imp6.transform(X_window[imp_names]), columns=imp_names, index=X_window.index)
-                X_q_final = X_imputed.copy()
-                for col in q05_6.feature_name_:
-                    if col not in X_q_final:
-                        X_q_final[col] = X_window[col].values
-                
-                q05s = q05_6.predict(X_q_final[q05_6.feature_name_]) + X_window['aqi_current'].values
-                q95s = q95_6.predict(X_q_final[q95_6.feature_name_]) + X_window['aqi_current'].values
+            # 2. Quantile predictions
+            q05s = _hist_predict(q05_6, X_window) + X_window['aqi_current'].values
+            q95s = _hist_predict(q95_6, X_window) + X_window['aqi_current'].values
 
             preds = np.round(np.clip(preds, 0, 500)).astype(int)
             q05s  = np.round(np.clip(q05s,  0, 500)).astype(int)
