@@ -276,8 +276,9 @@ def _call_gemini(prompt: str, api_key: str) -> str:
     except requests.exceptions.Timeout:
         return "The AI took too long to respond. Please try again."
     except Exception as exc:
+        # Mask the raw exception so as not to leak the API key in the URL
         print(f"[ai] Gemini call failed: {exc}", file=sys.stderr)
-        return "Something went wrong with the AI response. Please try again."
+        return "The Navigator is temporarily offline due to high traffic. Please try again in a few moments."
 
 
 def ask_ai(question: str, data: dict) -> str:
