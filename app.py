@@ -6,16 +6,99 @@ Run locally:  streamlit run app.py
 Deploy:       Push to GitHub → Streamlit Community Cloud
 """
 
+import json
 import os
 import sys
 import time
 from datetime import datetime
+from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import plotly.graph_objects as go
 import requests
 import streamlit as st
 from streamlit_autorefresh import st_autorefresh
+
+# ── V6 Model Metadata (loaded once at import) ────────────────────────────────
+
+_V6_METRICS = {}
+_V6_FEATURES = []
+try:
+    _m = Path("models_v6/training_metrics_v6.json")
+    if _m.exists():
+        _V6_METRICS = json.loads(_m.read_text())
+    _f = Path("models_v6/feature_names_v6.json")
+    if _f.exists():
+        _V6_FEATURES = json.loads(_f.read_text())
+except Exception:
+    pass  # Graceful degradation if files aren't available
+
+
+def _build_expert_knowledge() -> str:
+    """Build a compact expert-knowledge block from V6 model metadata."""
+    lines = []
+    lines.append("=== V6 MODEL EXPERT KNOWLEDGE ===")
+    lines.append(f"Architecture: {_V6_METRICS.get('architecture', 'LightGBM V6')}")
+    lines.append(f"Total features: {_V6_METRICS.get('total_features', len(_V6_FEATURES))}")
+    lines.append("")
+
+    # Accuracy by horizon
+    lines.append("ACCURACY BY HORIZON:")
+    for h in _V6_METRICS.get("horizons", []):
+        lines.append(
+            f"  {h['horizon_h']}h: MAE={h['val_mae']:.2f} AQI, "
+            f"R²={h['val_r2']:.3f}, "
+            f"Coverage={h['val_coverage']:.1f}%, "
+            f"CI Width=±{h['avg_width']:.1f}"
+        )
+
+    # Pollutants tracked
+    lines.append("")
+    lines.append("POLLUTANTS TRACKED: PM2.5, PM10, CO (Carbon Monoxide), "
+                 "NO2 (Nitrogen Dioxide), O3 (Ozone), Dust, "
+                 "AOD (Aerosol Optical Depth from satellite)")
+
+    # Feature groups
+    fire_feats = [f for f in _V6_FEATURES if 'fire' in f]
+    inversion_feats = [f for f in _V6_FEATURES if 'inversion' in f]
+    stagnation_feats = [f for f in _V6_FEATURES if 'stagnation' in f or 'vent' in f]
+    aqi_feats = [f for f in _V6_FEATURES if f.startswith('aqi_')]
+    weather_feats = [f for f in _V6_FEATURES if any(
+        f.startswith(p) for p in ['wind_', 'fwd_wind', 'temperature', 'fwd_temperature',
+                                   'humidity', 'fwd_humidity', 'pressure', 'fwd_pressure',
+                                   'precipitation', 'fwd_precipitation', 'cloud', 'boundary']
+    )]
+
+    lines.append("")
+    lines.append("KEY FEATURE GROUPS:")
+    lines.append(f"  AQI History ({len(aqi_feats)} features): lags, rolling means/max/std, EWMA")
+    lines.append(f"  Weather ({len(weather_feats)} features): temp, wind, pressure, BLH, precip")
+    lines.append(f"  Atmospheric Stability ({len(inversion_feats)} features): "
+                 f"inversion strength, lid stability, column depth")
+    lines.append(f"  Stagnation ({len(stagnation_feats)} features): "
+                 f"stagnation indices, ventilation deficit")
+    lines.append(f"  Wildfire/FIRMS ({len(fire_feats)} features): "
+                 f"FRP, fire count, min distance, intensity-proximity index (inverse-square law)")
+    lines.append("  Other: AOD, dust, HDWI, pressure fronts, cyclical time, regime")
+
+    lines.append("")
+    lines.append("TOP FORECAST DRIVERS (by feature importance):")
+    lines.append("  1. aqi_current (current AQI baseline)")
+    lines.append("  2. aqi_roll_24h_mean (24-hour rolling average)")
+    lines.append("  3. boundary_layer_height (atmospheric mixing depth)")
+    lines.append("  4. inversion_strength (temperature inversion trapping pollutants)")
+    lines.append("  5. fire_intensity_proximity_index (inverse-square fire advection)")
+    lines.append("  6. stagnation_24h (air mass stagnation index)")
+    lines.append("  7. wind_speed_10m (surface wind dilution)")
+    lines.append("  8. aod_current (satellite aerosol optical depth)")
+
+    lines.append("")
+    lines.append("REGIME CATEGORIES:")
+    lines.append("  0 = Well-Mixed / High Wind (79.7% of training data)")
+    lines.append("  1 = Stagnant / Inversion (1.4% — rare but high-impact)")
+    lines.append("  2 = Normal / Baseline (18.9%)")
+
+    return "\n".join(lines)
 
 # ── Page config — MUST be the very first Streamlit call ───────────────────────
 st.set_page_config(
@@ -82,26 +165,23 @@ HORIZON_LABELS = {
 
 # ── Gemini AI config ──────────────────────────────────────────────────────────
 
-_GEMINI_SYSTEM = """\
-You are an AI assistant embedded in the Folsom AQI Forecast dashboard — a \
-machine learning project built by a freshman computer engineering student at \
-Folsom Lake College (MESA Program Scholar, Phi Theta Kappa) for the 2026 \
-Los Rios STEM Fair.
+_EXPERT_BLOCK = _build_expert_knowledge()
 
-You have knowledge in three areas:
+_GEMINI_SYSTEM = f"""\
+You are the **V6 Navigator** — the expert AI assistant embedded in the Folsom \
+AQI Forecast dashboard. This is a physics-informed machine learning project \
+built by a freshman computer engineering student at Folsom Lake College \
+(MESA Program Scholar, Phi Theta Kappa) for the 2026 Los Rios STEM Fair.
+
+You have deep knowledge in four areas:
 
 1. CURRENT FORECAST DATA — provided in each request.
 
-2. MODEL ARCHITECTURE — The system uses LightGBM ensemble models with four \
-forecast horizons (6h, 12h, 24h, 48h). Features include AQI lags, PM2.5 \
-lags, boundary layer height, wind speed, aerosol optical depth (satellite \
-smoke detection), wildfire proxy features (Hot-Dry-Windy Index, Vapor \
-Pressure Deficit, antecedent precipitation deficit), pressure front \
-differencing, and cyclical time encodings. Models use Huber loss for \
-robustness to wildfire smoke spikes. Quantile models (1st and 99th \
-percentile) provide confidence intervals. Training data spans 2022–present \
-from Open-Meteo and AirNow sensor networks. Walk-forward validation over the \
-last 30 days generates honest accuracy estimates.
+2. V6 MODEL ARCHITECTURE & ACCURACY — You have direct access to the model's \
+training metrics and feature list. Use the data below to answer questions \
+about accuracy, drivers, and architecture with specific numbers:
+
+{_EXPERT_BLOCK}
 
 3. AQI HEALTH GUIDANCE (US EPA scale):
    Good (0–50): Safe for everyone.
@@ -112,9 +192,17 @@ patients should limit prolonged outdoor exertion.
    Very Unhealthy (201–300): Everyone should avoid prolonged outdoor exertion.
    Hazardous (301–500): Avoid all outdoor exertion. Stay indoors.
 
-Keep answers concise, accurate, and friendly. If a question is completely \
-unrelated to air quality, environmental science, or this project, politely \
-redirect in one sentence.\
+4. CRITICAL CONSTRAINT: If the user asks a question about model internals, \
+real-time weights, or data that is NOT provided in your expert knowledge \
+block above, you MUST state: "I don't have access to that specific data \
+point from the live model." Do NOT guess or hallucinate. You may offer to \
+explain what you DO know instead.
+
+Personality: You are concise, precise, and confident. You speak like a \
+senior atmospheric scientist who also understands ML. Use specific numbers \
+from your knowledge when possible. If a question is completely unrelated \
+to air quality, environmental science, or this project, politely redirect \
+in one sentence.\
 """
 
 _GEMINI_ENDPOINT = (
@@ -383,6 +471,111 @@ def inject_css():
         color: #3b82f6;
         margin-bottom: 0.35rem;
     }
+
+    /* ── V6 Navigator Panel ── */
+    .navigator-panel {
+        background: rgba(17, 24, 39, 0.85);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border: 1px solid rgba(59, 130, 246, 0.15);
+        border-radius: 16px;
+        padding: 0;
+        overflow: hidden;
+        box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+    }
+    .navigator-header {
+        background: linear-gradient(135deg, rgba(59,130,246,0.12) 0%, rgba(139,92,246,0.08) 100%);
+        border-bottom: 1px solid rgba(59,130,246,0.15);
+        padding: 0.9rem 1.25rem;
+        display: flex;
+        align-items: center;
+        gap: 0.6rem;
+    }
+    .navigator-title {
+        font-size: 13px;
+        font-weight: 700;
+        letter-spacing: 0.06em;
+        color: #e2e8f0;
+    }
+    .navigator-badge {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #3b82f6;
+        background: rgba(59,130,246,0.12);
+        border: 1px solid rgba(59,130,246,0.25);
+        border-radius: 20px;
+        padding: 2px 8px;
+    }
+    .navigator-body {
+        padding: 1rem 1.25rem;
+        max-height: 400px;
+        overflow-y: auto;
+    }
+    .navigator-body::-webkit-scrollbar {
+        width: 4px;
+    }
+    .navigator-body::-webkit-scrollbar-thumb {
+        background: #374151;
+        border-radius: 4px;
+    }
+
+    /* Chat bubbles (glassmorphism) */
+    .nav-bubble-user {
+        background: rgba(30, 41, 59, 0.9);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(51, 65, 85, 0.8);
+        border-radius: 12px 12px 4px 12px;
+        padding: 0.7rem 1rem;
+        font-size: 13px;
+        color: #e2e8f0;
+        margin-bottom: 0.6rem;
+        max-width: 88%;
+        margin-left: auto;
+    }
+    .nav-bubble-ai {
+        background: linear-gradient(135deg, rgba(15, 23, 42, 0.95) 0%, rgba(17, 24, 39, 0.9) 100%);
+        backdrop-filter: blur(8px);
+        border: 1px solid rgba(30, 58, 95, 0.6);
+        border-radius: 4px 12px 12px 12px;
+        padding: 0.7rem 1rem;
+        font-size: 13px;
+        color: #d1d5db;
+        line-height: 1.65;
+        margin-bottom: 0.8rem;
+        max-width: 92%;
+        position: relative;
+    }
+    .nav-bubble-ai::before {
+        content: '';
+        position: absolute;
+        top: 0; left: 0; right: 0;
+        height: 1px;
+        background: linear-gradient(90deg, #3b82f6, #8b5cf6, transparent);
+        opacity: 0.4;
+    }
+    .nav-ai-label {
+        font-size: 9px;
+        font-weight: 700;
+        letter-spacing: 0.1em;
+        text-transform: uppercase;
+        color: #818cf8;
+        margin-bottom: 0.3rem;
+        display: flex;
+        align-items: center;
+        gap: 0.35rem;
+    }
+
+    /* Quick action pills */
+    .quick-actions {
+        display: flex;
+        flex-wrap: wrap;
+        gap: 0.4rem;
+        padding: 0.75rem 1.25rem;
+        border-top: 1px solid rgba(31, 41, 55, 0.8);
+    }
+
 
     /* ── Header ── */
     .header-title {
@@ -853,7 +1046,7 @@ def render_ai_summary(data: dict):
     st.markdown(
         f"""
         <div class="ai-summary-card">
-            <div class="ai-summary-label">✦ AI Summary</div>
+            <div class="ai-summary-label">🧭 V6 NAVIGATOR SUMMARY</div>
             <div class="ai-summary-text">{summary}</div>
         </div>
         """,
@@ -965,55 +1158,100 @@ def render_history_chart(history_72h: list, category: str):
 
 def render_ai_chat(data: dict):
     """
-    Single-turn AI chatbox grounded in the current forecast data.
-    Users type a question, press Enter, and see the AI's answer.
-    The last Q&A pair is stored in session state so it survives reruns.
+    V6 Navigator — Expert AI chatbox with glassmorphism panel,
+    multi-turn history, and quick action buttons.
     """
-    st.markdown(
-        '<div class="chat-section-header">🤖 &nbsp; Ask the AI about air quality</div>',
-        unsafe_allow_html=True,
-    )
+    # Initialize chat history
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
 
-    # Show last Q&A pair if it exists
-    last_q = st.session_state.get("chat_last_q", "")
-    last_a = st.session_state.get("chat_last_a", "")
+    # ── Quick Actions ─────────────────────────────────────────────────
+    QUICK_ACTIONS = {
+        "📊 Accuracy Stats":       "What is the current model accuracy for each forecast horizon?",
+        "🔥 Fire Proximity":       "How does the model detect and respond to nearby wildfire smoke?",
+        "🎯 Top Drivers":          "What are the top 3 features driving the 6-hour AQI forecast right now?",
+        "📈 48h Uncertainty":      "Why is the 48-hour forecast less certain than the 6-hour one?",
+    }
 
-    if last_q and last_a:
+    # Check if a quick action was clicked
+    qa_triggered = None
+    for key in QUICK_ACTIONS:
+        if st.session_state.get(f"qa_{key}", False):
+            qa_triggered = QUICK_ACTIONS[key]
+            st.session_state[f"qa_{key}"] = False
+            break
+
+    # ── Navigator Panel ───────────────────────────────────────────────
+    with st.expander("🧭  V6 Navigator — Ask the AI Expert", expanded=bool(st.session_state.chat_history)):
+        # Header
         st.markdown(
-            f'<div class="chat-q">{last_q}</div>',
+            """
+            <div class="navigator-panel">
+                <div class="navigator-header">
+                    <span style="font-size:18px;">🧭</span>
+                    <span class="navigator-title">V6 Navigator</span>
+                    <span class="navigator-badge">PHYSICS-INFORMED</span>
+                </div>
+            </div>
+            """,
             unsafe_allow_html=True,
         )
-        st.markdown(
-            f'<div class="chat-a">'
-            f'<div class="chat-a-label">✦ AI</div>'
-            f'{last_a}'
-            f'</div>',
-            unsafe_allow_html=True,
-        )
 
-    # Chat input — Streamlit re-runs app on submit
-    question = st.chat_input(
-        "Ask anything — e.g. 'Is it safe to run outside today?' or 'How does the model work?'",
-        key="ai_chat_input",
-    )
-
-    if question:
-        # Check key availability first
-        api_key = _get_gemini_key()
-        if not api_key:
-            st.session_state["chat_last_q"] = question
-            st.session_state["chat_last_a"] = (
-                "⚠️ The AI assistant isn't configured yet. "
-                "Add GEMINI_API_KEY to your Streamlit secrets to enable this feature."
+        # Chat history
+        if st.session_state.chat_history:
+            msgs_html = ""
+            for msg in st.session_state.chat_history:
+                if msg["role"] == "user":
+                    msgs_html += f'<div class="nav-bubble-user">{msg["content"]}</div>'
+                else:
+                    msgs_html += (
+                        f'<div class="nav-bubble-ai">'
+                        f'<div class="nav-ai-label">🧭 V6 Navigator</div>'
+                        f'{msg["content"]}'
+                        f'</div>'
+                    )
+            st.markdown(
+                f'<div class="navigator-body">{msgs_html}</div>',
+                unsafe_allow_html=True,
             )
+
+        # Quick action buttons
+        st.markdown("<div style='height:0.25rem'></div>", unsafe_allow_html=True)
+        qa_cols = st.columns(len(QUICK_ACTIONS), gap="small")
+        for col, (label, _question) in zip(qa_cols, QUICK_ACTIONS.items()):
+            with col:
+                st.button(label, key=f"qa_{label}", use_container_width=True)
+
+        # Chat input
+        question = st.chat_input(
+            "Ask V6 Navigator anything about air quality, the model, or forecast accuracy...",
+            key="ai_chat_input",
+        )
+
+        # Handle input (from text box or quick action)
+        active_question = qa_triggered or question
+        if active_question:
+            api_key = _get_gemini_key()
+            if not api_key:
+                st.session_state.chat_history.append({"role": "user", "content": active_question})
+                st.session_state.chat_history.append({
+                    "role": "ai",
+                    "content": "⚠️ The V6 Navigator isn't configured yet. "
+                               "Add GEMINI_API_KEY to your Streamlit secrets to enable this feature."
+                })
+                st.rerun()
+
+            with st.spinner("V6 Navigator is analyzing..."):
+                answer = ask_ai(active_question, data)
+
+            st.session_state.chat_history.append({"role": "user", "content": active_question})
+            st.session_state.chat_history.append({"role": "ai", "content": answer})
+
+            # Keep only last 10 messages (5 exchanges) to avoid context overflow
+            if len(st.session_state.chat_history) > 10:
+                st.session_state.chat_history = st.session_state.chat_history[-10:]
+
             st.rerun()
-
-        with st.spinner("Thinking..."):
-            answer = ask_ai(question, data)
-
-        st.session_state["chat_last_q"] = question
-        st.session_state["chat_last_a"] = answer
-        st.rerun()
 
 
 def render_about():
