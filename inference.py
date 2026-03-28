@@ -58,6 +58,7 @@ def _get_model_metadata() -> dict:
     }
 
 MODELS_DIR    = Path("models_v6")
+DATA_DIR      = Path("data")
 HORIZONS      = [6, 12, 24, 48]
 TZ            = ZoneInfo("America/Los_Angeles")
 
