@@ -16,13 +16,13 @@ import numpy as np
 import pandas as pd
 
 from data_fetcher import fetch_recent_combined, fetch_airnow_current
-from features import engineer_features
+from features_v6 import engineer_features, classify_regime
 from ai_layer import generate_summary
 import requests
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-MODELS_DIR    = Path("models")
+MODELS_DIR    = Path("models_v6")
 DATA_DIR      = Path("data")
 CACHE_FILE    = DATA_DIR / "latest.json"
 MODEL_VERSION = "v1.0"
@@ -216,43 +216,47 @@ def predict_now() -> dict:
 
             imputer = m["imputer"]
             point   = m["point"]
-            # ─── Dynamic Feature Alignment ───
-            # This handles cases where point models (74 features) and 
-            # quantile models (76 features) are out of sync.
             
-            # 1. Align/Impute correctly for the Point Model (74 features)
-            pt_model = m["point"]
-            X_pt     = X_now[pt_model.feature_name_]
-            X_pt_imp = imputer.transform(X_pt)
-            res_pt   = pt_model.predict(X_pt_imp)[0]
-            
-            # 2. Align/Impute for the Quantile Models (76 features)
-            q05_model = m["q05"]
-            q95_model = m["q95"]
-            X_q05 = X_now[q05_model.feature_name_]
-            X_q95 = X_now[q95_model.feature_name_]
-            
-            # Try to use the imputer on its original 74 features, then re-merge the 2 non-imputed ones (dow_sin/cos)
-            try:
-                X_q05_imp = imputer.transform(X_q05)
-                X_q95_imp = imputer.transform(X_q95)
-            except Exception:
-                # Traditional imputer (74 features) — subset, then fill the rest manually if needed
-                imp_names = pt_model.feature_name_
-                X_for_imp = X_now[imp_names]
-                X_imputed = pd.DataFrame(imputer.transform(X_for_imp), columns=imp_names, index=X_now.index)
+            # --- V6: Inject the Categorical "Regime" Feature ---
+            regime_series = classify_regime(df)
+            if now_ts in regime_series.index:
+                val = regime_series.loc[now_ts]
+                curr_regime = val.iloc[0] if isinstance(val, pd.Series) else val
+            else:
+                curr_regime = regime_series.iloc[-1]
                 
-                # Now, for any missing columns in the 76-set (like dow_sin/cos), just pull from the original X
-                X_q_final = X_imputed.copy()
-                for col in q05_model.feature_name_:
-                    if col not in X_q_final:
-                        X_q_final[col] = X_now[col].values
-                
-                X_q05_imp = X_q_final[q05_model.feature_name_]
-                X_q95_imp = X_q_final[q95_model.feature_name_]
+            def prep_for_model(model_obj, X_raw):
+                X_sub = X_raw[model_obj.feature_name_]
+                if 'regime' in X_sub.columns:
+                    X_cont = X_sub.drop(columns=['regime'])
+                else:
+                    X_cont = X_sub
+                # Handle possible imputer mismatch (if model has 76 but imputer was fit on 74)
+                try:
+                    X_imp = imputer.transform(X_cont)
+                    X_df = pd.DataFrame(X_imp, columns=X_cont.columns, index=X_raw.index)
+                except ValueError:
+                    # Fallback for older V4 quantile models if they are loaded accidentally
+                    imp_names = imputer.feature_names_in_ if hasattr(imputer, 'feature_names_in_') else X_cont.columns
+                    X_for_imp = X_cont[imp_names]
+                    X_imp = imputer.transform(X_for_imp)
+                    X_df = pd.DataFrame(X_imp, columns=imp_names, index=X_raw.index)
+                    for c in X_cont.columns:
+                        if c not in X_df.columns:
+                            X_df[c] = X_cont[c].values
 
-            res_q05 = q05_model.predict(X_q05_imp)[0]
-            res_q95 = q95_model.predict(X_q95_imp)[0]
+                if 'regime' in model_obj.feature_name_:
+                    X_df['regime'] = pd.Categorical([curr_regime] * len(X_df), categories=[0, 1, 2])
+                return X_df[model_obj.feature_name_]
+
+            X_pt_df = prep_for_model(point, X_now)
+            res_pt = point.predict(X_pt_df)[0]
+            
+            X_q05_df = prep_for_model(m["q05"], X_now)
+            res_q05 = m["q05"].predict(X_q05_df)[0]
+            
+            X_q95_df = prep_for_model(m["q95"], X_now)
+            res_q95 = m["q95"].predict(X_q95_df)[0]
 
             # Invert to absolute AQI values
             pred_point = res_pt + base_aqi_now

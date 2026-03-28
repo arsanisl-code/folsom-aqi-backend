@@ -1,0 +1,150 @@
+imputation with 
+strategy='median'.
+  warnings.warn(
+============================================================
+  Folsom AQI -- V5 Physics-Informed 2025 Holdout Backtest
+============================================================
+Loaded 45,853 rows from data\historical.parquet
+  Columns: 23
+  Has temperature_850hPa: True
+
+>>> Processing 6h Horizon...
+  Training feature set: 110 continuous + 1 categorical
+  [WARNING] Imputer dropped 1 columns. Reconstructing...
+  Training point model (21099 rows)...
+  Training q01 model (21099 rows)...
+  Training q99 model (21099 rows)...
+    [diag] 6h Jan: delta=2.44
+    [diag] 6h Jun: delta=1.41
+    [diag] 6h Dec: delta=0.00
+
+>>> Processing 12h Horizon...
+  Training feature set: 110 continuous + 1 categorical
+  [WARNING] Imputer dropped 1 columns. Reconstructing...
+  Training point model (21099 rows)...
+  Training q01 model (21099 rows)...
+  Training q99 model (21099 rows)...
+    [diag] 12h Jan: delta=1.80
+    [diag] 12h Jun: delta=3.26
+    [diag] 12h Dec: delta=0.00
+
+>>> Processing 24h Horizon...
+  Training feature set: 110 continuous + 1 categorical
+  [WARNING] Imputer dropped 1 columns. Reconstructing...
+  Training point model (21099 rows)...
+  Training q01 model (21099 rows)...
+  Training q99 model (21099 rows)...
+    [diag] 24h Jan: delta=0.00
+    [diag] 24h Jan Noise Parity: Base MAE=7.89, Noisy MAE=8.44
+    [diag] 24h Jun: delta=0.00
+    [diag] 24h Dec: delta=4.88
+
+>>> Processing 48h Horizon...
+  Training feature set: 110 continuous + 1 categorical
+  [WARNING] Imputer dropped 1 columns. Reconstructing...
+  Training point model (21099 rows)...
+  Training q01 model (21099 rows)...
+  Training q99 model (21099 rows)...
+    [diag] 48h Jan: delta=1.23
+    [48h DIAG] Full-month R2: -0.243 | Subset R2: -0.683 | Full var: 163.7 | Subset var: 153.0
+    [48h DIAG] Full-month R2: -0.281 | Subset R2: -0.406 | Full var: 129.8 | Subset var: 136.1
+    [48h DIAG] Full-month R2: 0.006 | Subset R2: 0.045 | Full var: 92.1 | Subset var: 102.5
+    [48h DIAG] Full-month R2: 0.153 | Subset R2: 0.151 | Full var: 98.0 | Subset var: 122.9
+    [48h DIAG] Full-month R2: 0.225 | Subset R2: 0.175 | Full var: 466.7 | Subset var: 566.9
+    [diag] 48h Jun: delta=0.00
+    [48h DIAG] Full-month R2: 0.368 | Subset R2: 0.305 | Full var: 429.5 | Subset var: 541.8
+    [48h DIAG] Full-month R2: 0.137 | Subset R2: 0.458 | Full var: 433.5 | Subset var: 188.8
+    [48h DIAG] Full-month R2: 0.391 | Subset R2: 0.402 | Full var: 504.4 | Subset var: 591.2
+    [48h DIAG] Full-month R2: -0.104 | Subset R2: -0.744 | Full var: 286.6 | Subset var: 156.6
+    [48h DIAG] Full-month R2: -0.053 | Subset R2: -0.772 | Full var: 197.6 | Subset var: 201.0
+    [48h DIAG] Full-month R2: 0.589 | Subset R2: 0.355 | Full var: 528.4 | Subset var: 512.1
+    [diag] 48h Dec: delta=8.70
+    [48h DIAG] Full-month R2: 0.388 | Subset R2: -0.399 | Full var: 644.4 | Subset var: 152.6
+
+============================================================================================================================================
+  V5 PHYSICS-INFORMED 2025 BACKTEST (Trained on 2021-2024)
+============================================================================================================================================
+  Horizon    Month      MAE      R2       RawCov   ConfCov  RawWid   ConfWid  RawWink  ConfWink
+--------------------------------------------------------------------------------------------------------------------------------------------
+  6h         Jan        1.47     0.974    97.3     99.7     15.4     20.3     21.8     21.6
+  6h         Feb        2.35     0.931    95.2     97.9     16.1     18.4     28.3     24.0
+  6h         Mar        2.79     0.846    90.9     93.3     17.2     18.1     39.6     33.9
+  6h         Apr        3.91     0.648    91.7     92.5     23.1     23.5     93.2     90.7
+  6h         May        6.89     0.736    85.2     97.3     40.6     70.6     233.1    99.2
+  6h         Jun        5.83     0.817    92.5     94.2     46.4     49.2     122.2    106.0
+  6h         Jul        3.43     0.834    98.1     100.0    32.1     48.3     37.6     48.3
+  6h         Aug        5.98     0.759    95.2     96.8     45.3     50.8     114.2    99.4
+  6h         Sep        5.60     0.617    93.1     98.9     33.9     73.2     186.8    99.9
+  6h         Oct        3.16     0.828    91.7     96.2     19.7     24.6     106.4    85.7
+  6h         Nov        2.72     0.980    94.7     98.6     28.3     35.6     50.1     36.3
+  6h         Dec        2.63     0.958    95.2     95.2     21.5     21.5     37.4     37.4
+  12h        Jan        3.67     0.838    96.8     98.9     31.7     35.3     41.4     37.3
+  12h        Feb        4.56     0.727    92.6     94.3     30.4     31.0     58.7     55.4
+  12h        Mar        4.44     0.656    94.4     97.8     27.8     32.7     47.7     37.0
+  12h        Apr        5.31     0.466    98.6     98.6     34.5     34.5     72.0     72.0
+  12h        May        9.01     0.608    81.5     95.4     56.0     73.6     313.2    154.6
+  12h        Jun        7.59     0.702    93.3     97.5     66.2     72.7     109.6    85.6
+  12h        Jul        4.66     0.768    98.1     100.0    46.7     87.3     56.3     87.3
+  12h        Aug        6.62     0.771    95.2     98.7     59.7     72.7     105.9    87.6
+  12h        Sep        8.19     0.490    94.4     100.0    50.2     89.6     89.5     89.6
+  12h        Oct        6.02     0.677    93.8     95.4     36.7     38.9     90.4     80.1
+  12h        Nov        6.20     0.884    97.2     98.6     48.3     53.8     71.5     66.4
+  12h        Dec        5.53     0.712    95.2     95.2     37.1     37.1     60.2     60.2
+  24h        Jan        7.89     0.302    98.4     98.4     55.3     55.3     61.7     61.7
+  24h        Feb        7.45     0.178    96.7     96.7     53.7     53.7     84.8     84.8
+  24h        Mar        5.42     0.451    99.7     100.0    51.5     54.1     51.7     54.1
+  24h        Apr        6.74     0.348    100.0    100.0    53.1     53.1     53.1     53.1
+  24h        May        11.49    0.457    96.2     98.4     60.5     77.6     133.8    107.8
+  24h        Jun        10.42    0.569    98.3     98.3     63.3     63.3     91.4     91.4
+  24h        Jul        5.26     0.697    99.5     99.5     53.1     62.8     59.3     63.8
+  24h        Aug        8.05     0.685    98.9     98.9     63.3     66.6     80.4     80.1
+  24h        Sep        8.21     0.337    98.6     100.0    58.1     90.3     75.7     90.3
+  24h        Oct        9.85     0.226    95.7     95.7     53.9     53.9     96.6     96.6
+  24h        Nov        12.31    0.600    95.8     96.1     63.2     64.3     91.6     88.1
+  24h        Dec        8.95     0.145    98.4     100.0    56.0     65.8     58.3     65.8
+  48h        Jan        14.12    -0.683   100.0    100.0    68.7     71.1     68.7     71.1
+  48h        Feb        10.81    -0.406   97.9     97.9     66.8     66.8     81.5     81.5
+  48h        Mar        8.05     0.045    100.0    100.0    63.9     67.2     63.9     67.2
+  48h        Apr        8.03     0.151    100.0    100.0    65.3     65.3     65.3     65.3
+  48h        May        13.12    0.175    94.6     94.6     73.1     73.1     114.0    114.0
+  48h        Jun        13.79    0.305    100.0    100.0    80.0     80.0     80.0     80.0
+  48h        Jul        7.13     0.458    100.0    100.0    70.0     73.8     70.0     73.8
+  48h        Aug        11.44    0.402    98.7     98.7     81.5     82.7     109.5    109.1
+  48h        Sep        10.55    -0.744   98.9     100.0    74.3     100.0    78.5     100.0
+  48h        Oct        15.20    -0.772   98.7     98.7     70.2     70.2     73.2     73.2
+  48h        Nov        15.34    0.355    95.3     95.3     79.0     79.0     150.0    150.0
+  48h        Dec        10.90    -0.399   98.9     100.0    79.3     96.7     81.9     96.7
+--------------------------------------------------------------------------------------------------------------------------------------------
+  ANNUAL AVERAGES (2025 Full Year)
+  [OK] 12h      MAE=5.98     R2=0.692    Raw_Cov= 94.3% -> Conf_Cov= 97.5%
+       [!] 12h raw coverage 94.3% is below 99% target -- conformal correction applied
+  [OK] 24h      MAE=8.50     R2=0.416    Raw_Cov= 98.0% -> Conf_Cov= 98.5%
+       [!] 24h raw coverage 98.0% is below 99% target -- conformal correction applied
+  [OK] 48h      MAE=11.54    R2=-0.093   Raw_Cov= 98.6% -> Conf_Cov= 98.8%
+  [OK] 6h       MAE=3.90     R2=0.827    Raw_Cov= 93.4% -> Conf_Cov= 96.7%
+       [!] 6h raw coverage 93.4% is below 99% target -- conformal correction applied
+--------------------------------------------------------------------------------------------------------------------------------------------
+  MPIW Context (Good/Moderate boundary = 51 AQI):
+  12h      MPIW 54.9   = 1.08x Good category width
+  24h      MPIW 63.4   = 1.24x Good category width
+  48h      MPIW 77.2   = 1.51x Good category width
+  6h       MPIW 37.8   = 74.2% of Good category width
+
+  NOTE: Winkler Score = interval width + coverage penalty (alpha=0.01).
+  Lower is better. Scores above 3x MPIW indicate systematic under-coverage.
+  6h and 12h scores reflect calibration deficit corrected by conformal adjustment.
+
+==============================================================================================================
+  ORACLE BIAS SENSITIVITY ANALYSIS (NWP Noise Perturbation)
+==============================================================================================================
+  Horizon    Base MAE     Noisy MAE    MAE Drop     Base R2      Noisy R2     R2 Drop
+--------------------------------------------------------------------------------------------------------------
+  6h         3.90         4.57         +0.68        0.827        0.801        -0.026
+  12h         5.98         7.24         +1.26        0.692        0.596        -0.095
+  24h         8.50         8.84         +0.33        0.416        0.396        -0.020
+  48h         11.54        11.57        +0.03        -0.093       -0.099       -0.006
+==============================================================================================================
+  The near-zero 48h MAE degradation (+0.03) under maximum noise confirms that long-horizon skill derives
+  primarily from physics features and AQI persistence rather than forward NWP forecasts.
+
+[OK] V5 Backtest complete. Report saved -> backtest_v5_2025_report.csv

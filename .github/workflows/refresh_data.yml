@@ -29,6 +29,7 @@ jobs:
         env:
           AIRNOW_API_KEY: ${{ secrets.AIRNOW_API_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
         run: python refresh.py
 
       - name: Push to data-cache branch

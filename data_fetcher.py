@@ -14,8 +14,10 @@ from datetime import datetime, timedelta
 from pathlib import Path
 
 import pandas as pd
+import numpy as np
 import requests
 import urllib.parse
+import io
 from dotenv import load_dotenv
 
 load_dotenv()  # Load .env for AIRNOW_API_KEY
@@ -52,6 +54,59 @@ WEATHER_VARS = [
 
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
+
+def fetch_firms_recent(days: int = 2) -> pd.DataFrame:
+    """Fetch recent NASA FIRMS active fire data for the local region."""
+    api_key = os.environ.get("FIRMS_MAP_KEY")
+    if not api_key:
+        print("[data_fetcher] WARNING: FIRMS_MAP_KEY missing. Wildfire features will be 0.", file=sys.stderr)
+        return pd.DataFrame()
+        
+    sensors = ["MODIS_NRT", "VIIRS_SNPP_NRT"]
+    bbox = "-123.0,37.0,-119.0,40.5"
+    dfs = []
+    
+    for sensor in sensors:
+        url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{api_key}/{sensor}/{bbox}/{days}"
+        try:
+            resp = requests.get(url, timeout=15)
+            if resp.status_code == 200 and len(resp.text.strip()) > 0:
+                df_sensor = pd.read_csv(io.StringIO(resp.text))
+                if not df_sensor.empty:
+                    dfs.append(df_sensor)
+        except Exception as e:
+            print(f"[data_fetcher] FIRMS API error for {sensor}: {e}", file=sys.stderr)
+            
+    if not dfs:
+        return pd.DataFrame()
+        
+    df = pd.concat(dfs, ignore_index=True)
+    if 'latitude' not in df.columns or 'longitude' not in df.columns or 'frp' not in df.columns:
+        return pd.DataFrame()
+    
+    # Haversine distance
+    lat1, lon1 = np.radians(df['latitude']), np.radians(df['longitude'])
+    lat2, lon2 = np.radians(LAT), np.radians(LON)
+    dlat, dlon = lat2 - lat1, lon2 - lon1
+    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
+    df['distance_km'] = 6371 * (2 * np.arcsin(np.sqrt(a)))
+    
+    # Convert 'acq_date' + 'acq_time' to datetime
+    df['acq_time'] = df['acq_time'].astype(str).str.zfill(4)
+    df['datetime_utc'] = pd.to_datetime(df['acq_date'] + ' ' + df['acq_time'], format='%Y-%m-%d %H%M', errors='coerce').dt.tz_localize('UTC')
+    df = df.dropna(subset=['datetime_utc'])
+    df['datetime_local'] = df['datetime_utc'].dt.tz_convert(TZ).dt.floor('h')
+    
+    # Aggregate hourly
+    hourly = df.groupby('datetime_local').agg(
+        fire_frp_raw=('frp', 'sum'),
+        fire_count_raw=('frp', 'count'),
+        fire_min_dist_raw=('distance_km', 'min')
+    )
+    
+    hourly.index.name = 'time'
+    return hourly
+
 
 def _ensure_cache_dir():
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
@@ -245,6 +300,19 @@ def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
         wx_df    = _hourly_to_df(wx_data, WEATHER_VARS)
 
         merged   = _merge_aq_weather(aq_df, wx_df)
+        
+        # Inject FIRMS satellite fire data (V6.0)
+        firms_df = fetch_firms_recent()
+        if not firms_df.empty:
+            merged = merged.join(firms_df, how='left')
+            merged['fire_frp_raw'] = merged['fire_frp_raw'].fillna(0.0)
+            merged['fire_count_raw'] = merged['fire_count_raw'].fillna(0.0)
+            merged['fire_min_dist_raw'] = merged['fire_min_dist_raw'].fillna(999.0)
+        else:
+            merged['fire_frp_raw'] = 0.0
+            merged['fire_count_raw'] = 0.0
+            merged['fire_min_dist_raw'] = 999.0
+
         merged.to_parquet(cache)
         print(f"[data_fetcher] Recent combined: {len(merged)} rows")
         return merged

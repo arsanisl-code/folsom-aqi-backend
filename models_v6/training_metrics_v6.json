@@ -1,0 +1,38 @@
+{
+  "trained_at": "2026-03-27T21:58:14.870762",
+  "architecture": "V6 Physics-Informed + Regime Soft-Routing",
+  "total_features": 138,
+  "categorical_features": [
+    "regime"
+  ],
+  "horizons": [
+    {
+      "horizon_h": 6,
+      "val_mae": 2.19,
+      "val_r2": 0.942,
+      "val_coverage": 96.2,
+      "avg_width": 15.7
+    },
+    {
+      "horizon_h": 12,
+      "val_mae": 4.13,
+      "val_r2": 0.836,
+      "val_coverage": 95.0,
+      "avg_width": 28.4
+    },
+    {
+      "horizon_h": 24,
+      "val_mae": 7.72,
+      "val_r2": 0.47,
+      "val_coverage": 97.7,
+      "avg_width": 43.1
+    },
+    {
+      "horizon_h": 48,
+      "val_mae": 9.75,
+      "val_r2": 0.115,
+      "val_coverage": 98.7,
+      "avg_width": 59.9
+    }
+  ]
+}

@@ -7,6 +7,7 @@
 data/*.parquet
 data/*.csv
 data/cache/
+data/firms_archive/
 
 # 3. Python Junk
 __pycache__/
