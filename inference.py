@@ -22,6 +22,41 @@ import requests
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
+MODEL_VERSION    = "V6.1-Physics-Informed"
+CACHE_FILE       = Path("data/latest.json")
+BACKTEST_RESULTS = Path("data/backtest_results.json")
+
+# ── V6 Model Metadata (loaded once at import) ────────────────────────────────
+_V6_METRICS = {}
+_V6_FEATURES = []
+try:
+    _m = Path("models_v6/training_metrics_v6.json")
+    if _m.exists():
+        _V6_METRICS = json.loads(_m.read_text())
+    _f = Path("models_v6/feature_names_v6.json")
+    if _f.exists():
+        _V6_FEATURES = json.loads(_f.read_text())
+except Exception:
+    pass  # Graceful degradation if files aren't available
+
+
+def _get_model_metadata() -> dict:
+    """Return a clean subset of model metadata for the frontend."""
+    return {
+        "architecture":         _V6_METRICS.get("architecture", "LightGBM V6"),
+        "total_features":       _V6_METRICS.get("total_features", len(_V6_FEATURES)),
+        "horizons":             _V6_METRICS.get("horizons", []),
+        "feature_names":        _V6_FEATURES,
+        "primary_drivers": [
+            "aqi_current",
+            "aqi_roll_24h_mean",
+            "boundary_layer_height",
+            "inversion_strength",
+            "fire_intensity_proximity_index",
+            "stagnation_24h"
+        ]
+    }
+
 MODELS_DIR    = Path("models_v6")
 DATA_DIR      = Path("data")
 CACHE_FILE    = DATA_DIR / "latest.json"
@@ -325,6 +360,7 @@ def predict_now() -> dict:
         "forecasts":              forecasts,
         "history_72h":            history_72h,
         "model_version":          MODEL_VERSION,
+        "model_metadata":         _get_model_metadata(),
         "data_freshness_minutes": fetch_age_minutes,
         "ai_summary":             "",   # populated below if GEMINI_API_KEY is set
     }
