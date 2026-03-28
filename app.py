@@ -167,21 +167,17 @@ HORIZON_LABELS = {
 
 _EXPERT_BLOCK = _build_expert_knowledge()
 
-_GEMINI_SYSTEM = f"""\
-You are the **V6 Navigator** — the expert AI assistant embedded in the Folsom \
-AQI Forecast dashboard. This is a physics-informed machine learning project \
-built by a freshman computer engineering student at Folsom Lake College \
-(MESA Program Scholar, Phi Theta Kappa) for the 2026 Los Rios STEM Fair.
+_GEMINI_BASE_SYSTEM = """\
+You are the **Folsom Navigator** — the expert AI assistant embedded in the \
+Folsom AQI Monitor dashboard. This system is a physics-informed expert \
+assistant built for the 2026 Los Rios STEM Fair.
 
 You have deep knowledge in four areas:
 
 1. CURRENT FORECAST DATA — provided in each request.
 
-2. V6 MODEL ARCHITECTURE & ACCURACY — You have direct access to the model's \
-training metrics and feature list. Use the data below to answer questions \
-about accuracy, drivers, and architecture with specific numbers:
-
-{_EXPERT_BLOCK}
+2. SYSTEM ARCHITECTURE & ACCURACY — Use the provided expert knowledge block \
+to answer questions about reliability and atmospheric drivers. 
 
 3. AQI HEALTH GUIDANCE (US EPA scale):
    Good (0–50): Safe for everyone.
@@ -192,17 +188,19 @@ patients should limit prolonged outdoor exertion.
    Very Unhealthy (201–300): Everyone should avoid prolonged outdoor exertion.
    Hazardous (301–500): Avoid all outdoor exertion. Stay indoors.
 
-4. CRITICAL CONSTRAINT: If the user asks a question about model internals, \
-real-time weights, or data that is NOT provided in your expert knowledge \
-block above, you MUST state: "I don't have access to that specific data \
-point from the live model." Do NOT guess or hallucinate. You may offer to \
-explain what you DO know instead.
+4. CRITICAL PERSONA CONSTRAINTS:
+   - NEVER mention 'V6', 'models', 'LightGBM', or 'machine learning'.
+   - Refer to the system as the 'Navigator' or 'Expert System'.
+   - Re-frame technical metrics: instead of 'MAE', use 'average error margin'. 
+     Instead of 'R-squared' or 'R2', use 'prediction reliability'.
+     Instead of 'Features', use 'Atmospheric factors' or 'Environmental drivers'.
+   - If asked how you work, explain that you use an 'ensemble of physics-informed \
+atmospheric patterns' and 'historical data signatures' to predict air quality.
+   - If data is missing, say: "I don't have access to that specific atmospheric \
+detail from the live system."
 
-Personality: You are concise, precise, and confident. You speak like a \
-senior atmospheric scientist who also understands ML. Use specific numbers \
-from your knowledge when possible. If a question is completely unrelated \
-to air quality, environmental science, or this project, politely redirect \
-in one sentence.\
+Personality: You are concise, precise, and authoritative. You speak like a senior \
+atmospheric scientist who simplifies complex data for the Folsom public.\
 """
 
 _GEMINI_ENDPOINT = (
@@ -262,7 +260,7 @@ def _call_gemini(prompt: str, api_key: str) -> str:
             "Add it to your Streamlit secrets to enable AI responses."
         )
     payload = {
-        "system_instruction": {"parts": [{"text": _GEMINI_SYSTEM}]},
+        "system_instruction": {"parts": [{"text": _GEMINI_BASE_SYSTEM + "\n\n" + _EXPERT_BLOCK}]},
         "contents": [{"parts": [{"text": prompt}]}],
         "generationConfig": {"temperature": 0.4, "maxOutputTokens": 400},
     }
@@ -429,50 +427,7 @@ def inject_css():
         color: #d1d5db;
     }
 
-    /* ── Chat section ── */
-    .chat-section-header {
-        font-size: 11px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: #4b5563;
-        margin-bottom: 0.75rem;
-        display: flex;
-        align-items: center;
-        gap: 0.5rem;
-    }
-    .chat-q {
-        background: #1e293b;
-        border: 1px solid #334155;
-        border-radius: 12px 12px 4px 12px;
-        padding: 0.75rem 1rem;
-        font-size: 13px;
-        color: #e2e8f0;
-        margin-bottom: 0.5rem;
-        max-width: 85%;
-        margin-left: auto;
-    }
-    .chat-a {
-        background: #0f172a;
-        border: 1px solid #1e3a5f;
-        border-radius: 4px 12px 12px 12px;
-        padding: 0.75rem 1rem;
-        font-size: 13px;
-        color: #d1d5db;
-        line-height: 1.65;
-        margin-bottom: 1rem;
-        max-width: 90%;
-    }
-    .chat-a-label {
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: #3b82f6;
-        margin-bottom: 0.35rem;
-    }
-
-    /* ── V6 Navigator Panel ── */
+    /* ── Navigator Panel ── */
     .navigator-panel {
         background: rgba(17, 24, 39, 0.85);
         backdrop-filter: blur(20px);
@@ -496,17 +451,6 @@ def inject_css():
         font-weight: 700;
         letter-spacing: 0.06em;
         color: #e2e8f0;
-    }
-    .navigator-badge {
-        font-size: 9px;
-        font-weight: 700;
-        letter-spacing: 0.1em;
-        text-transform: uppercase;
-        color: #3b82f6;
-        background: rgba(59,130,246,0.12);
-        border: 1px solid rgba(59,130,246,0.25);
-        border-radius: 20px;
-        padding: 2px 8px;
     }
     .navigator-body {
         padding: 1rem 1.25rem;
@@ -566,16 +510,6 @@ def inject_css():
         align-items: center;
         gap: 0.35rem;
     }
-
-    /* Quick action pills */
-    .quick-actions {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.4rem;
-        padding: 0.75rem 1.25rem;
-        border-top: 1px solid rgba(31, 41, 55, 0.8);
-    }
-
 
     /* ── Header ── */
     .header-title {
@@ -694,7 +628,6 @@ def inject_css():
     @media (max-width: 480px) {
         .block-container { padding: 0.75rem !important; }
         .aqi-card { padding: 1rem; }
-        .chat-q, .chat-a { max-width: 100%; }
     }
     </style>
     """, unsafe_allow_html=True)
@@ -1036,17 +969,15 @@ def render_advisory(category: str, color: str):
 def render_ai_summary(data: dict):
     """
     Render the AI-generated plain-English summary card.
-    Reads from data['ai_summary'] — generated hourly by inference.py.
-    If the field is empty (key missing or blank), the card is hidden entirely.
     """
     summary = data.get("ai_summary", "").strip()
     if not summary:
-        return   # Backend hasn't generated it yet (no GEMINI_API_KEY set on server)
+        return
 
     st.markdown(
         f"""
         <div class="ai-summary-card">
-            <div class="ai-summary-label">🧭 V6 NAVIGATOR SUMMARY</div>
+            <div class="ai-summary-label">🧭 NAVIGATION SUMMARY</div>
             <div class="ai-summary-text">{summary}</div>
         </div>
         """,
@@ -1158,39 +1089,20 @@ def render_history_chart(history_72h: list, category: str):
 
 def render_ai_chat(data: dict):
     """
-    V6 Navigator — Expert AI chatbox with glassmorphism panel,
-    multi-turn history, and quick action buttons.
+    Navigator — Expert Assistant with glassmorphism panel.
     """
-    # Initialize chat history
     if "chat_history" not in st.session_state:
         st.session_state.chat_history = []
 
-    # ── Quick Actions ─────────────────────────────────────────────────
-    QUICK_ACTIONS = {
-        "📊 Accuracy Stats":       "What is the current model accuracy for each forecast horizon?",
-        "🔥 Fire Proximity":       "How does the model detect and respond to nearby wildfire smoke?",
-        "🎯 Top Drivers":          "What are the top 3 features driving the 6-hour AQI forecast right now?",
-        "📈 48h Uncertainty":      "Why is the 48-hour forecast less certain than the 6-hour one?",
-    }
-
-    # Check if a quick action was clicked
-    qa_triggered = None
-    for key in QUICK_ACTIONS:
-        if st.session_state.get(f"qa_{key}", False):
-            qa_triggered = QUICK_ACTIONS[key]
-            st.session_state[f"qa_{key}"] = False
-            break
-
     # ── Navigator Panel ───────────────────────────────────────────────
-    with st.expander("🧭  V6 Navigator — Ask the AI Expert", expanded=bool(st.session_state.chat_history)):
+    with st.expander("🧭  Navigator — Expert Air Quality Assistant", expanded=bool(st.session_state.chat_history)):
         # Header
         st.markdown(
             """
             <div class="navigator-panel">
                 <div class="navigator-header">
                     <span style="font-size:18px;">🧭</span>
-                    <span class="navigator-title">V6 Navigator</span>
-                    <span class="navigator-badge">PHYSICS-INFORMED</span>
+                    <span class="navigator-title">Folsom Navigator</span>
                 </div>
             </div>
             """,
