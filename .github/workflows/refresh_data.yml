@@ -2,8 +2,9 @@ name: Refresh AQI Forecast Data
 
 on:
   schedule:
-    - cron: '0 * * * *'  # Run every hour
-  workflow_dispatch:      # Allow manual trigger
+    - cron: '0 * * * *'   # On the hour
+    - cron: '30 * * * *'  # Half past
+  workflow_dispatch:       # Allow manual trigger
 
 jobs:
   refresh:
