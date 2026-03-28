@@ -424,15 +424,22 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
 
 def load_remote_forecast() -> dict | None:
     """Fetch the latest.json from the GitHub data-cache branch (the CDN)."""
-    # Placeholder strings to be filled by the user or final sed command
     OWNER = "arsanisl-code"
     REPO  = "folsom-aqi-backend"
-    URL   = f"https://raw.githubusercontent.com/{OWNER}/{REPO}/data-cache/data/latest.json"
+    # Using the GitHub API is more reliable for private repos than raw.githubusercontent
+    URL   = f"https://api.github.com/repos/{OWNER}/{REPO}/contents/data/latest.json?ref=data-cache"
+    
+    token = os.getenv("GITHUB_TOKEN")
+    headers = {"Accept": "application/vnd.github.v3.raw"}
+    if token:
+        headers["Authorization"] = f"token {token}"
     
     try:
-        resp = requests.get(URL, timeout=10)
+        resp = requests.get(URL, headers=headers, timeout=15)
         if resp.status_code == 200:
             return resp.json()
+        else:
+            print(f"[inference] Remote CDN status {resp.status_code}: {resp.text[:100]}", file=sys.stderr)
     except Exception as exc:
         print(f"[inference] Remote CDN fetch failed: {exc}", file=sys.stderr)
     return None
