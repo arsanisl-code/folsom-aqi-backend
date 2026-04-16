@@ -205,7 +205,7 @@ atmospheric scientist who simplifies complex data for the Folsom public.\
 
 _GEMINI_ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.0-flash:generateContent"
+    "gemini-2.5-flash-lite:generateContent"
 )
 
 

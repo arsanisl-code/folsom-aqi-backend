@@ -19,7 +19,7 @@ import google.generativeai as genai
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-GEMINI_MODEL = "gemini-2.5-flash"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 
 # How the AI presents itself and what it knows
 _SYSTEM_PROMPT = """\
@@ -52,7 +52,7 @@ exertion. Stay indoors where possible.
 outdoor exertion and remain indoors.
 
 CRITICAL PERSONA CONSTRAINTS:
-- NEVER mention 'V6', 'models', 'LightGBM', or 'machine learning'.
+- NEVER mention 'V6', 'models'.
 - NEVER mention any developer names, college affiliations, or STEM fairs.
 - Refer to the system as the 'Navigator' or 'Expert System'.
 - If asked how you work, explain that you use an 'ensemble of physics-informed \

@@ -199,34 +199,43 @@ def predict_now() -> dict:
 
     # ── Step 4: Build features and predict for each horizon ───────────────
     forecasts = {}
+    df_base = df.copy()  # Create a clean immutable base dataframe for the loop
+    prev_width = 0       # Track interval width to enforce monotonically increasing uncertainty
+    
     for h in HORIZONS:
         m = models[h]
         try:
             # Step 4a: Robustly inject real-time data and sanitize weather anomalies
-            df = df.copy()
+            df_h = df_base.copy()
             now_ts = pd.Timestamp.now(tz=TZ).floor('h')
             
-            # 1. Inject AirNow data precisely at 'now' and for the rest of today
-            # To ensure rolling means and lags 'pick up' the 30 AQI immediately.
+            # 1. Inject AirNow data smoothly via Uniform Offset Calibration
+            # Shifts the entire Open-Meteo curve to match AirNow without creating unphysical differential spikes
             if airnow:
                 aq_val = float(airnow.get("aqi", 30))
-                # Fill everything from 24h ago to today with AirNow if missing
-                df.loc[now_ts - timedelta(hours=24):now_ts, "us_aqi"] = df.loc[now_ts - timedelta(hours=24):now_ts, "us_aqi"].fillna(aq_val)
-                df.at[now_ts, "us_aqi"] = aq_val
+                if now_ts in df_h.index and not np.isnan(df_h.at[now_ts, "us_aqi"]):
+                    om_now = df_h.at[now_ts, "us_aqi"]
+                else:
+                    past_om = df_h[df_h.index <= now_ts]["us_aqi"].dropna()
+                    om_now = past_om.iloc[-1] if len(past_om) > 0 else aq_val
+                    
+                offset = aq_val - om_now
+                # Apply uniformly to prevent breaking 1h diffs and rolling physics
+                df_h["us_aqi"] = (df_h["us_aqi"] + offset).clip(lower=0)
 
             # 2. Sanity Guard: Open-Meteo sometimes hallucinates 5-6% humidity or 30km/h wind for Folsom
             # We clamp these to prevent extreme Wildfire signals (HDWI)
-            if "relative_humidity_2m" in df.columns:
-                df["relative_humidity_2m"] = df["relative_humidity_2m"].clip(lower=25.0) # floor to 25%
-            if "wind_speed_10m" in df.columns:
-                df["wind_speed_10m"] = df["wind_speed_10m"].clip(upper=25.0) # cap at 25km/h (~15mph)
+            if "relative_humidity_2m" in df_h.columns:
+                df_h["relative_humidity_2m"] = df_h["relative_humidity_2m"].clip(lower=25.0) # floor to 25%
+            if "wind_speed_10m" in df_h.columns:
+                df_h["wind_speed_10m"] = df_h["wind_speed_10m"].clip(upper=25.0) # cap at 25km/h (~15mph)
             
             # Fill gaps (ensures today's rows have at least the latest known values)
             for col in ["us_aqi", "pm2_5"]:
-                if col in df.columns:
-                    df[col] = df[col].ffill()
+                if col in df_h.columns:
+                    df_h[col] = df_h[col].ffill()
             
-            X_inf, _ = engineer_features(df, horizon_h=h)
+            X_inf, _ = engineer_features(df_h, horizon_h=h)
             
             # Step 4b: Correctly select the row for "NOW" (flored)
             if now_ts in X_inf.index:
@@ -240,8 +249,7 @@ def predict_now() -> dict:
             X_now = X_now.ffill()
             # 2. Strict cast to float (converts 'None' or 'Object' to NaN for the imputer)
             X_now = X_now.apply(pd.to_numeric, errors='coerce')
-            # 3. Final fillna(0) for any truly empty fields (safe since imputer follows)
-            X_now = X_now.fillna(0)
+            
             # Capture the current absolute baseline to invert the residual
             base_aqi_now = X_now['aqi_current'].values[0]
             if np.isnan(base_aqi_now):
@@ -251,7 +259,7 @@ def predict_now() -> dict:
             point   = m["point"]
             
             # --- V6: Inject the Categorical "Regime" Feature ---
-            regime_series = classify_regime(df)
+            regime_series = classify_regime(df_h)
             if now_ts in regime_series.index:
                 val = regime_series.loc[now_ts]
                 curr_regime = int(val.iloc[0]) if isinstance(val, pd.Series) else int(val)
@@ -306,8 +314,24 @@ def predict_now() -> dict:
 
             # Clip to valid AQI range
             pred_point = max(0, min(500, round(pred_point)))
-            pred_q05   = max(0, min(500, round(pred_q05)))
-            pred_q95   = max(0, min(500, round(pred_q95)))
+            
+            # Fix quantile crossing natively
+            pred_q05_sorted = min(pred_q05, pred_q95)
+            pred_q95_sorted = max(pred_q05, pred_q95)
+            
+            # Enforce Monotonic Uncertainty Growth (intervals must never shrink over time)
+            current_width = pred_q95_sorted - pred_q05_sorted
+            if current_width < prev_width:
+                # Expand symmetrically to match the previous horizon's uncertainty
+                diff = (prev_width - current_width) / 2.0
+                pred_q05_sorted -= diff
+                pred_q95_sorted += diff
+                current_width = prev_width
+                
+            prev_width = current_width
+
+            pred_q05 = max(0, min(500, round(pred_q05_sorted)))
+            pred_q95 = max(0, min(500, round(pred_q95_sorted)))
 
             # Guarantee ci_lo ≤ point ≤ ci_hi after clipping
             pred_q05 = min(pred_q05, pred_point)
