@@ -37,18 +37,20 @@ TRAIN_START    = "2021-01-01"
 TRAIN_END      = "2024-12-31"
 BACKTEST_YEAR  = 2025
 
-BACKTEST_POINT_N_ESTIMATORS    = 10000
-BACKTEST_QUANTILE_N_ESTIMATORS = 10000
+BACKTEST_POINT_N_ESTIMATORS    = 20000
+BACKTEST_QUANTILE_N_ESTIMATORS = 20000
 
 ALPHAS = {"q01": 0.005, "q99": 0.995}
 
 
 def load_best_params():
-    params_path = MODELS_DIR / "best_optuna_params.json"
-    if not params_path.exists():
-        print(f"[backtest_v6] ERROR: {params_path} not found.")
+    target = MODELS_DIR / "best_optuna_params_v9.json"
+    if not target.exists():
+        target = MODELS_DIR / "best_optuna_params.json"
+    if not target.exists():
+        print(f"[backtest_v6] ERROR: {target} not found.")
         sys.exit(1)
-    with open(params_path, "r") as f:
+    with open(target, "r") as f:
         return json.load(f)
 
 
@@ -61,7 +63,8 @@ def get_params(all_params, horizon_h, model_type):
 
     if model_type == "point":
         if horizon_h >= 48:
-            params["objective"] = "mae"
+            params["objective"] = "huber"
+            params["alpha"] = 1.5
         else:
             params["objective"] = "huber"
             params["alpha"] = 2.0
@@ -155,7 +158,7 @@ def main():
         # 6. Train models (Dynamic complexity via 10,000 estimators + early stopping)
         trained_models = {}
         for m_type in MODEL_TYPES:
-            print(f"  Training {m_type} model (max 10,000 trees)...")
+            print(f"  Training {m_type} model (max 20,000 trees)...")
             params = get_params(all_params, h, m_type)
             model = lgb.LGBMRegressor(**params)
             model.fit(
@@ -163,7 +166,7 @@ def main():
                 sample_weight=w_fit,
                 eval_set=[(X_es, y_es)],
                 eval_sample_weight=[w_es],
-                callbacks=[lgb.log_evaluation(False), lgb.early_stopping(100, verbose=False)],
+                callbacks=[lgb.log_evaluation(False), lgb.early_stopping(150, verbose=False)],
                 categorical_feature=cat_features,
             )
             trained_models[m_type] = model

@@ -45,19 +45,23 @@ HORIZONS = [6, 12, 24, 48]
 
 # ─── Optuna parameter ingestion ───────────────────────────────────────────────
 
-OPTUNA_PARAMS_PATH = V4_MODELS_DIR / "best_optuna_params.json"
+# Prioritize the V9 Optuna params if they exist; otherwise fallback to V4
+OPTUNA_V9_PATH = MODELS_DIR / "best_optuna_params_v9.json"
+OPTUNA_V4_PATH = V4_MODELS_DIR / "best_optuna_params.json"
 
 
 def _load_optuna_params() -> dict | None:
-    if not OPTUNA_PARAMS_PATH.exists():
+    target = OPTUNA_V9_PATH if OPTUNA_V9_PATH.exists() else OPTUNA_V4_PATH
+    if not target.exists():
         return None
     try:
-        with open(OPTUNA_PARAMS_PATH) as f:
+        with open(target) as f:
             data = json.load(f)
-        print(f"[train_v6] ✓ Loaded Optuna-tuned params from {OPTUNA_PARAMS_PATH}")
+        source = "V9" if "v9" in str(target).lower() else "V4"
+        print(f"[train_v6] ✓ Loaded {source} Optuna-tuned params from {target}")
         return data
     except Exception as exc:
-        print(f"[train_v6] WARNING: Could not load {OPTUNA_PARAMS_PATH}: {exc}",
+        print(f"[train_v6] WARNING: Could not load {target}: {exc}",
               file=sys.stderr)
         return None
 
@@ -84,12 +88,12 @@ def _point_params(horizon_h: int) -> dict:
         # V8: For 48h, use MAE (Pinball α=0.5) instead of Huber to give
         # equal gradient weight to fat-tail smoke events (no outlier dampening)
         if horizon_h >= 48:
-            obj, alpha = 'mae', None
+            obj, alpha = 'huber', 1.5
         else:
             obj, alpha = 'huber', 2.0
         params = {
             'objective':    obj,
-            'n_estimators': 10000,
+            'n_estimators': 20000,
             'n_jobs':       -1,
             'verbosity':    -1,
             'random_state': 42,
@@ -100,7 +104,7 @@ def _point_params(horizon_h: int) -> dict:
             params['alpha'] = alpha
         return params
     base = dict(
-        n_estimators=10000,
+        n_estimators=20000,
         learning_rate=0.01, subsample=0.8, subsample_freq=1,
         colsample_bytree=0.8, random_state=42, n_jobs=-1, verbosity=-1,
     )
@@ -113,8 +117,8 @@ def _point_params(horizon_h: int) -> dict:
                     num_leaves=63, max_depth=7, min_child_samples=40,
                     reg_alpha=1.0, reg_lambda=2.0)
     else:
-        # V8: MAE for 48h + deeper trees to exploit momentum features
-        base.update(objective='mae',
+        # V9: Huber with lower alpha for 48h — more sensitive to fat-tail errors
+        base.update(objective='huber', alpha=1.5,
                     num_leaves=63, max_depth=7, min_child_samples=40,
                     reg_alpha=1.0, reg_lambda=2.0)
     return base
@@ -127,7 +131,7 @@ def _quantile_params(alpha: float, horizon_h: int) -> dict:
         return {
             'objective':    'quantile',
             'alpha':        alpha,
-            'n_estimators': 10000,
+            'n_estimators': 20000,
             'n_jobs':       -1,
             'verbosity':    -1,
             'random_state': 42,
@@ -135,7 +139,7 @@ def _quantile_params(alpha: float, horizon_h: int) -> dict:
             **tuned,
         }
     return dict(
-        objective='quantile', alpha=alpha, n_estimators=10000,
+        objective='quantile', alpha=alpha, n_estimators=20000,
         learning_rate=0.01, num_leaves=63, max_depth=7, min_child_samples=40, verbosity=-1,
     )
 
@@ -183,11 +187,14 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     # Tell LightGBM which columns are categorical
     cat_features = ['regime']
 
-    # 4. Temporal Sample Weighting
-    # 2021-2022 data is valuable for extreme wildfire memory, but less representative 
-    # of current atmospheric dynamics. De-weight it (0.5) to prioritize recent patterns.
+    # 4. Sample Weighting (Temporal + Fat-Tail)
+    # A) Temporal: 2021-2022 data down-weighted to 0.5 (valuable but less representative)
+    # B) Fat-tail: Rows where current AQI > 75 or |target| > 20 get 3x weight
+    #    (forensic audit shows fat-tail MAE = 5.56 vs normal 1.79 — must focus here)
     weights = np.ones(len(y_train))
     weights[X_train.index.year <= 2022] = 0.5
+    fat_tail_mask = (X_train['aqi_current'].values > 75) | (np.abs(y_train.values) > 20)
+    weights[fat_tail_mask] *= 3.0
 
     # ── Leakage-free early stopping ──────────────────────────────────────
     # Using a 10% stratified random sample (by month) so the evaluation set
@@ -220,7 +227,7 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
         sample_weight=w_fit,
         eval_set=[(X_es_df, y_es)],
         eval_sample_weight=[w_es],
-        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(100, verbose=True)],
+        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(150, verbose=True)],
         categorical_feature=cat_features,
     )
     point_path = MODELS_DIR / f"lgbm_point_{horizon_h}h.pkl"
@@ -235,7 +242,7 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
         sample_weight=w_fit,
         eval_set=[(X_es_df, y_es)],
         eval_sample_weight=[w_es],
-        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(100, verbose=False)],
+        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(150, verbose=False)],
         categorical_feature=cat_features,
     )
     q05_path = MODELS_DIR / f"lgbm_q05_{horizon_h}h.pkl"
@@ -250,7 +257,7 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
         sample_weight=w_fit,
         eval_set=[(X_es_df, y_es)],
         eval_sample_weight=[w_es],
-        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(100, verbose=False)],
+        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(150, verbose=False)],
         categorical_feature=cat_features,
     )
     q95_path = MODELS_DIR / f"lgbm_q95_{horizon_h}h.pkl"

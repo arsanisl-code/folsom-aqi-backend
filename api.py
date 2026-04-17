@@ -41,11 +41,11 @@ async def lifespan(app: FastAPI):
     _startup_time = datetime.now().isoformat()
 
     print("[api] Loading models...", file=sys.stderr)
-    models_dir = Path("models")
+    models_dir = Path("models_v6")
     if not models_dir.exists():
         raise RuntimeError(
-            "models/ directory not found. "
-            "Run train.py locally and copy models/ to the server with deploy.sh."
+            "models_v6/ directory not found. "
+            "Run train.py locally and copy models_v6/ to the server with deploy.sh."
         )
 
     try:

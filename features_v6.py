@@ -126,7 +126,6 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
     X['precipitation']         = df['precipitation']
     X['cloud_cover']           = df['cloud_cover']
     X['direct_radiation']      = pd.to_numeric(df.get('direct_radiation'), errors='coerce').fillna(0)
-    X['soil_temp']             = pd.to_numeric(df.get('soil_temperature_0_to_7cm'), errors='coerce').fillna(0)
     X = X.copy()
 
 
@@ -162,6 +161,10 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
     fwd_temp_pc = df['temperature_2m'].shift(-horizon_h)
     fwd_thermal = np.exp(0.069 * (fwd_temp_pc - 25.0))
     X['fwd_photochem_forcing'] = (fwd_ghi / 1000.0) * (fwd_rh_pc / 100.0).clip(0.3, 1.0) * fwd_thermal
+    
+    # V8.2: Forward Photochemical Accumulation (Volumetric)
+    # Solves the "8 PM zero-sun blindness" by tracking accumulated baking prior to the target
+    X['fwd_photochem_accum_12h'] = X['photochem_forcing'].rolling(12, min_periods=1).sum().shift(-horizon_h)
 
     # -----------------------------------------------------------------------
     # WILDFIRE PROXY FEATURES (Priority 4)
@@ -388,6 +391,7 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
         
         # Forward-shifted version at T+horizon_h
         X['fwd_inversion_column_depth'] = X['inversion_column_depth'].shift(-horizon_h)
+        X['fwd_inversion_lid_stability'] = X['inversion_lid_stability'].shift(-horizon_h)
         X = X.copy()
 
 
@@ -539,15 +543,25 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
         if 'fire_bearing_nearest' in df.columns:
             fire_bearing = pd.to_numeric(df['fire_bearing_nearest'], errors='coerce')
             fire_to_folsom_deg = (fire_bearing + 180.0) % 360.0
+            
+            # Current Alignment
             wind_dir_adv = pd.to_numeric(df['wind_direction_10m'], errors='coerce')
             angle_diff_rad = np.radians(wind_dir_adv - fire_to_folsom_deg)
             alignment = np.cos(angle_diff_rad).clip(lower=0)
             X['fire_advection_score'] = X['fire_intensity_proximity_index'] * alignment
+            
+            # V8.2 Forward Alignment: Match predicted wind against current fire
+            fwd_wind_dir_adv = wind_dir_adv.shift(-horizon_h)
+            fwd_angle_diff_rad = np.radians(fwd_wind_dir_adv - fire_to_folsom_deg)
+            fwd_alignment = np.cos(fwd_angle_diff_rad).clip(lower=0)
+            X['fwd_fire_advection_score'] = X['fire_intensity_proximity_index'] * fwd_alignment
         else:
             # Graceful fallback: use non-directional proxy for historical data
             X['fire_advection_score'] = X['fire_intensity_proximity_index']
+            X['fwd_fire_advection_score'] = X['fire_intensity_proximity_index']
         
         X['fire_advection_24h_max'] = X['fire_advection_score'].rolling(24, min_periods=1).max()
+        X['fwd_fire_advection_24h_max'] = X['fire_advection_score'].rolling(24, min_periods=1).max().shift(-horizon_h)
 
     # -----------------------------------------------------------------------
     # V8: MULTI-SCALE ATMOSPHERIC MOMENTUM (Anti-Mean-Reversion)
@@ -571,6 +585,42 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
     
     # Sustained fat-tail persistence (hours in last 48 that were anomalous)
     X['fat_tail_persistence_48h'] = X['fat_tail_flag'].rolling(48, min_periods=1).sum()
+
+    # -----------------------------------------------------------------------
+    # V9: SECOND-ORDER INTERACTION FEATURES
+    # LightGBM trees approximate multiplicative relationships across splits,
+    # but cannot reproduce them exactly. These explicit cross-products give
+    # the model a single-split shortcut to the physics the trees need
+    # multiple levels to approximate.
+    # -----------------------------------------------------------------------
+    # 1. Atmospheric Stability Index: T(K) / BLH — high means trapped hot air
+    X['stability_index'] = (X['fwd_temperature_mean'] + 273.15) / X['fwd_blh'].clip(lower=50)
+
+    # 2. Trapping Power: inversion depth / wind — deep inversion + low wind = trapped
+    X['trapping_power'] = X['inversion_column_24h_mean'] / X['fwd_wind_speed_mean'].clip(lower=0.5)
+
+    # 3. Forward Ventilation Stress: humidity amplifies trapping deficit
+    X['fwd_ventilation_stress'] = X['fwd_humidity_mean'] * X['fwd_vent_deficit']
+
+    # 4. Volatility x Frontal Momentum: detects regime transitions
+    X['volatility_frontal'] = X['aqi_roll_168h_std'] * X['pressure_diff_48h'].abs()
+
+    # 5. Summer Photochem: season-conditional solar accumulation
+    summer_flag = ((df.index.month >= 5) & (df.index.month <= 9)).astype(float)
+    X['summer_photochem_accum'] = X['fwd_photochem_accum_12h'] * summer_flag
+
+    # -----------------------------------------------------------------------
+    # V9: EVENING BLH COLLAPSE VELOCITY
+    # Forensic audit found +0.99 AQI systematic underprediction in evening
+    # hours (6-12 PM). Root cause: rapid boundary layer collapse after sunset
+    # traps pollutants, and no current feature captures this rate of change.
+    # -----------------------------------------------------------------------
+    X['blh_collapse_rate'] = df['boundary_layer_height'].diff(3)
+    X['fwd_blh_collapse_rate'] = df['boundary_layer_height'].diff(3).shift(-horizon_h)
+
+    target_hour = (df.index.hour + horizon_h) % 24
+    is_evening_target = ((target_hour >= 18) & (target_hour <= 23)).astype(float)
+    X['evening_trap_flag'] = (X['fwd_blh_collapse_rate'] < -50).astype(float) * is_evening_target
 
     # -----------------------------------------------------------------------
     # Target construction

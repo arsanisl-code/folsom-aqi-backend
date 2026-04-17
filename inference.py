@@ -130,9 +130,6 @@ def load_all_models() -> dict:
             p = MODELS_DIR / f"lgbm_{kind}_{h}h.pkl"
             if not p.exists():
                 missing.append(str(p))
-        ip = MODELS_DIR / f"imputer_{h}h.pkl"
-        if not ip.exists():
-            missing.append(str(ip))
 
     if missing:
         raise RuntimeError(
