@@ -37,8 +37,8 @@ TRAIN_START    = "2021-01-01"
 TRAIN_END      = "2024-12-31"
 BACKTEST_YEAR  = 2025
 
-BACKTEST_POINT_N_ESTIMATORS    = 1000
-BACKTEST_QUANTILE_N_ESTIMATORS = 500
+BACKTEST_POINT_N_ESTIMATORS    = 10000
+BACKTEST_QUANTILE_N_ESTIMATORS = 10000
 
 ALPHAS = {"q01": 0.005, "q99": 0.995}
 
@@ -60,8 +60,11 @@ def get_params(all_params, horizon_h, model_type):
     params = {"random_state": 42, "n_jobs": -1, "verbosity": -1, **best}
 
     if model_type == "point":
-        params["objective"] = "huber"
-        params["alpha"] = 2.0
+        if horizon_h >= 48:
+            params["objective"] = "mae"
+        else:
+            params["objective"] = "huber"
+            params["alpha"] = 2.0
         params["n_estimators"] = BACKTEST_POINT_N_ESTIMATORS
     else:
         params["objective"] = "quantile"
@@ -122,43 +125,47 @@ def main():
             print(f"  [ERROR] No training data for {h}h")
             continue
 
-        # 5. Impute continuous columns, preserve regime
+        # 5. Temporal weighting and Early Stopping prep
         regime_train = X_train['regime']
-        X_train_cont = X_train.drop(columns=['regime'])
-
-        print(f"  Training feature set: {len(X_train_cont.columns)} continuous + 1 categorical")
-
-        imp = SimpleImputer(strategy="median")
-        X_train_imp_np = imp.fit_transform(X_train_cont)
-        
-        # Robust column reconstruction if imputer drops all-NaN columns
-        if X_train_imp_np.shape[1] != X_train_cont.shape[1]:
-            print(f"  [WARNING] Imputer dropped {X_train_cont.shape[1] - X_train_imp_np.shape[1]} columns. Reconstructing...")
-            # Use get_support if available (scikit-learn 1.0+)
-            try:
-                kept_cols = X_train_cont.columns[imp.get_support()]
-                X_train_imp = pd.DataFrame(X_train_imp_np, columns=kept_cols)
-                # Re-add dropped columns as 0 to keep constant shape
-                for col in set(X_train_cont.columns) - set(kept_cols):
-                    X_train_imp[col] = 0.0
-                X_train_imp = X_train_imp[X_train_cont.columns] # Reorder to original
-            except:
-                X_train_imp = pd.DataFrame(X_train_imp_np, columns=X_train_cont.columns[:X_train_imp_np.shape[1]])
-        else:
-            X_train_imp = pd.DataFrame(X_train_imp_np, columns=X_train_cont.columns)
-
-        X_train_imp['regime'] = regime_train.values
-        X_train_imp['regime'] = pd.Categorical(X_train_imp['regime'])
-
+        X_train['regime'] = pd.Categorical(X_train['regime'])
         cat_features = ['regime']
 
-        # 6. Train models
+        weights = np.ones(len(y_train))
+        weights[X_train.index.year <= 2022] = 0.5
+
+        # Leakage-free early stopping: 10% stratified sample by month
+        from sklearn.model_selection import train_test_split
+        es_within = np.zeros(len(X_train), dtype=bool)
+        _, es_idx = train_test_split(
+            np.arange(len(X_train)), 
+            test_size=0.10, 
+            random_state=42, 
+            stratify=X_train.index.month
+        )
+        es_within[es_idx] = True
+
+        X_fit = X_train[~es_within]
+        y_fit = y_train[~es_within]
+        w_fit = weights[~es_within]
+
+        X_es  = X_train[es_within]
+        y_es  = y_train[es_within]
+        w_es  = weights[es_within]
+
+        # 6. Train models (Dynamic complexity via 10,000 estimators + early stopping)
         trained_models = {}
         for m_type in MODEL_TYPES:
-            print(f"  Training {m_type} model ({len(X_train_imp)} rows)...")
+            print(f"  Training {m_type} model (max 10,000 trees)...")
             params = get_params(all_params, h, m_type)
             model = lgb.LGBMRegressor(**params)
-            model.fit(X_train_imp, y_train, categorical_feature=cat_features)
+            model.fit(
+                X_fit, y_fit,
+                sample_weight=w_fit,
+                eval_set=[(X_es, y_es)],
+                eval_sample_weight=[w_es],
+                callbacks=[lgb.log_evaluation(False), lgb.early_stopping(100, verbose=False)],
+                categorical_feature=cat_features,
+            )
             trained_models[m_type] = model
 
         # 7. Evaluate by month (2025)
@@ -175,32 +182,12 @@ def main():
 
             X_test, y_test = X[test_mask], y[test_mask]
 
-            # Impute test set (continuous only)
-            regime_test = X_test['regime']
-            X_test_cont = X_test.drop(columns=['regime'])
-            
-            # Use same logic for test set imputation to ensure shape consistency
-            X_test_imp_np = imp.transform(X_test_cont)
-            if X_test_imp_np.shape[1] != X_test_cont.shape[1]:
-                # Handled already by re-adding dropped columns to the imputer result
-                try:
-                    kept_cols = X_test_cont.columns[imp.get_support()]
-                    X_test_imp = pd.DataFrame(X_test_imp_np, columns=kept_cols)
-                    for col in set(X_test_cont.columns) - set(kept_cols):
-                        X_test_imp[col] = 0.0
-                    X_test_imp = X_test_imp[X_test_cont.columns]
-                except:
-                    X_test_imp = pd.DataFrame(X_test_imp_np, columns=X_test_cont.columns[:X_test_imp_np.shape[1]])
-            else:
-                X_test_imp = pd.DataFrame(X_test_imp_np, columns=X_test_cont.columns)
-
-            X_test_imp['regime'] = regime_test.values
-            X_test_imp['regime'] = pd.Categorical(X_test_imp['regime'])
+            X_test['regime'] = pd.Categorical(X_test['regime'])
 
             # Predict
-            pred_point = trained_models["point"].predict(X_test_imp)
-            pred_q05   = trained_models["q01"].predict(X_test_imp)
-            pred_q95   = trained_models["q99"].predict(X_test_imp)
+            pred_point = trained_models["point"].predict(X_test)
+            pred_q05   = trained_models["q01"].predict(X_test)
+            pred_q95   = trained_models["q99"].predict(X_test)
 
             # Invert residuals
             curr_aqi = X_test["aqi_current"].values

@@ -139,6 +139,31 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
     X['aqi_x_rad'] = X['aqi_current'] * X['direct_radiation']
 
     # -----------------------------------------------------------------------
+    # V8: PHOTOCHEMICAL FORCING INDEX
+    # Physics: Secondary PM2.5 forms through photochemical reactions when
+    # UV/solar radiation drives VOCs and NOx into particulate-phase sulfates.
+    # The reaction rate depends on GHI (energy), humidity (aqueous pathway),
+    # and temperature (Arrhenius kinetics).
+    # -----------------------------------------------------------------------
+    ghi = pd.to_numeric(df.get('shortwave_radiation', 0), errors='coerce').fillna(0)
+    _pc_temp = pd.to_numeric(df['temperature_2m'], errors='coerce')
+    _pc_rh   = pd.to_numeric(df['relative_humidity_2m'], errors='coerce')
+    ghi_norm = ghi / 1000.0
+    rh_factor = (_pc_rh / 100.0).clip(0.3, 1.0)
+    thermal_factor = np.exp(0.069 * (_pc_temp - 25.0))
+
+    X['photochem_forcing'] = ghi_norm * rh_factor * thermal_factor
+    X['photochem_forcing_6h'] = X['photochem_forcing'].rolling(6, min_periods=1).mean()
+    X['ghi_accum_12h'] = ghi.rolling(12, min_periods=1).sum()
+
+    # Forward photochemistry at the target hour
+    fwd_ghi = ghi.shift(-horizon_h)
+    fwd_rh_pc = df['relative_humidity_2m'].shift(-horizon_h)
+    fwd_temp_pc = df['temperature_2m'].shift(-horizon_h)
+    fwd_thermal = np.exp(0.069 * (fwd_temp_pc - 25.0))
+    X['fwd_photochem_forcing'] = (fwd_ghi / 1000.0) * (fwd_rh_pc / 100.0).clip(0.3, 1.0) * fwd_thermal
+
+    # -----------------------------------------------------------------------
     # WILDFIRE PROXY FEATURES (Priority 4)
     # Allows the models to detect high-fire-risk environmental geometry.
     # -----------------------------------------------------------------------
@@ -458,6 +483,15 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
     X['is_weekend']      = (day_of_week >= 5).astype(int)
     X = X.copy()
 
+    # -----------------------------------------------------------------------
+    # V8: COMMUTE TRAFFIC HARMONICS
+    # Second harmonic captures the bimodal AM/PM rush pattern that integer
+    # dummy encoding cannot represent (23:00 is NOT "far" from 00:00).
+    # -----------------------------------------------------------------------
+    X['hour_sin_2'] = np.sin(2 * 2 * np.pi * hr / 24)
+    X['hour_cos_2'] = np.cos(2 * 2 * np.pi * hr / 24)
+    X['weekday_rush_proxy'] = (1 - X['is_weekend']) * np.abs(np.sin(np.pi * hr / 12))
+
 
     # Future hour (cyclic) — very predictive for long horizons
     future_hour = (hour + horizon_h) % 24
@@ -496,11 +530,51 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
         # Thermal energy spreading over an area decays by the square of distance. 
         X['fire_intensity_proximity_index'] = X['fire_frp_24h_sum'] / ((X['fire_min_dist_24h'] + 1.0) ** 2)
 
+        # -------------------------------------------------------------------
+        # V8: VECTORIZED FIRE ADVECTION (Directional Smoke Transport)
+        # A fire only delivers smoke to Folsom if the wind blows FROM the fire
+        # TOWARD Folsom. We compute the dot product of wind vector and
+        # fire-to-Folsom vector, clamping negative (downwind) to zero.
+        # -------------------------------------------------------------------
+        if 'fire_bearing_nearest' in df.columns:
+            fire_bearing = pd.to_numeric(df['fire_bearing_nearest'], errors='coerce')
+            fire_to_folsom_deg = (fire_bearing + 180.0) % 360.0
+            wind_dir_adv = pd.to_numeric(df['wind_direction_10m'], errors='coerce')
+            angle_diff_rad = np.radians(wind_dir_adv - fire_to_folsom_deg)
+            alignment = np.cos(angle_diff_rad).clip(lower=0)
+            X['fire_advection_score'] = X['fire_intensity_proximity_index'] * alignment
+        else:
+            # Graceful fallback: use non-directional proxy for historical data
+            X['fire_advection_score'] = X['fire_intensity_proximity_index']
+        
+        X['fire_advection_24h_max'] = X['fire_advection_score'].rolling(24, min_periods=1).max()
+
     # -----------------------------------------------------------------------
-    # Group 6: Target construction
-    # FIX: Residual Prediction Transformation (Max R^2 Variance)
-    # Target = (Future AQI) - (Current AQI)
-    # The LightGBM tree now exclusively learns to predict the variance delta.
+    # V8: MULTI-SCALE ATMOSPHERIC MOMENTUM (Anti-Mean-Reversion)
+    # During fat-tail smoke events, AQI doesn't revert to mean — it follows
+    # atmospheric momentum. These features detect sustained buildups that
+    # the model should NOT predict will dissipate.
+    # -----------------------------------------------------------------------
+    # 6-hour momentum: short-term buildup vs daily trend
+    X['aqi_momentum_6h'] = X['aqi_ewma_6h'] - X['aqi_ewma_24h']
+    
+    # 24-hour momentum: multi-day escalation vs weekly baseline
+    X['aqi_momentum_24h'] = X['aqi_ewma_24h'] - X['aqi_roll_168h_mean']
+    
+    # Momentum acceleration: is the 6h slope itself steepening?
+    X['momentum_accel_6h'] = X['aqi_momentum_6h'] - X['aqi_momentum_6h'].shift(6)
+    
+    # Fat-tail event detector: current AQI > 2 sigma above 7-day mean
+    weekly_std = X['aqi_roll_168h_std'].clip(lower=1.0)
+    X['aqi_zscore_7d'] = (X['aqi_current'] - X['aqi_roll_168h_mean']) / weekly_std
+    X['fat_tail_flag'] = (X['aqi_zscore_7d'] > 2.0).astype(float)
+    
+    # Sustained fat-tail persistence (hours in last 48 that were anomalous)
+    X['fat_tail_persistence_48h'] = X['fat_tail_flag'].rolling(48, min_periods=1).sum()
+
+    # -----------------------------------------------------------------------
+    # Target construction
+    # Residual Prediction: Target = (Future AQI) - (Current AQI)
     # -----------------------------------------------------------------------
     y = df['us_aqi'].shift(-horizon_h) - df['us_aqi']
     y.name = 'target_residual'

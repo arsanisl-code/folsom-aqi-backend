@@ -91,11 +91,27 @@ def fetch_firms_recent(days: int = 2) -> pd.DataFrame:
     a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
     df['distance_km'] = 6371 * (2 * np.arcsin(np.sqrt(a)))
     
+    # V8: Compute bearing from Folsom TO each fire (degrees, 0=North, clockwise)
+    # Used by the feature engineer for vectorized smoke advection dot product
+    fire_lat_rad = np.radians(df['latitude'])
+    fire_lon_rad = np.radians(df['longitude'])
+    folsom_lat_rad = np.radians(LAT)
+    folsom_lon_rad = np.radians(LON)
+    d_lon = fire_lon_rad - folsom_lon_rad
+    x = np.sin(d_lon) * np.cos(fire_lat_rad)
+    y = np.cos(folsom_lat_rad) * np.sin(fire_lat_rad) - \
+        np.sin(folsom_lat_rad) * np.cos(fire_lat_rad) * np.cos(d_lon)
+    df['bearing_deg'] = np.degrees(np.arctan2(x, y)) % 360
+    
     # Convert 'acq_date' + 'acq_time' to datetime
     df['acq_time'] = df['acq_time'].astype(str).str.zfill(4)
     df['datetime_utc'] = pd.to_datetime(df['acq_date'] + ' ' + df['acq_time'], format='%Y-%m-%d %H%M', errors='coerce').dt.tz_localize('UTC')
     df = df.dropna(subset=['datetime_utc'])
     df['datetime_local'] = df['datetime_utc'].dt.tz_convert(TZ).dt.floor('h')
+    
+    # For each hour, find the bearing of the nearest fire (the one whose smoke matters most)
+    nearest_idx = df.groupby('datetime_local')['distance_km'].idxmin()
+    nearest_bearings = df.loc[nearest_idx].set_index('datetime_local')['bearing_deg']
     
     # Aggregate hourly
     hourly = df.groupby('datetime_local').agg(
@@ -103,6 +119,7 @@ def fetch_firms_recent(days: int = 2) -> pd.DataFrame:
         fire_count_raw=('frp', 'count'),
         fire_min_dist_raw=('distance_km', 'min')
     )
+    hourly['fire_bearing_nearest'] = nearest_bearings
     
     hourly.index.name = 'time'
     return hourly

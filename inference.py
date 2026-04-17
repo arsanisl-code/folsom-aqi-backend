@@ -146,7 +146,6 @@ def load_all_models() -> dict:
             "point":   joblib.load(MODELS_DIR / f"lgbm_point_{h}h.pkl"),
             "q05":     joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl"),
             "q95":     joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl"),
-            "imputer": joblib.load(MODELS_DIR / f"imputer_{h}h.pkl"),
         }
 
     _model_cache = models
@@ -255,7 +254,6 @@ def predict_now() -> dict:
             if np.isnan(base_aqi_now):
                 base_aqi_now = current_aqi
 
-            imputer = m["imputer"]
             point   = m["point"]
             
             # --- V6: Inject the Categorical "Regime" Feature ---
@@ -270,33 +268,8 @@ def predict_now() -> dict:
             X_now['regime'] = pd.Categorical([curr_regime], categories=[0, 1, 2])
                 
             def prep_for_model(model_obj, X_raw):
-                # Now that 'regime' is in X_now, simple slicing works
-                X_sub = X_raw[model_obj.feature_name_]
-                
-                # imputer expects only continuous features (not 'regime')
-                if 'regime' in X_sub.columns:
-                    X_cont = X_sub.drop(columns=['regime'])
-                else:
-                    X_cont = X_sub
-
-                try:
-                    X_imp = imputer.transform(X_cont)
-                    X_df = pd.DataFrame(X_imp, columns=X_cont.columns, index=X_raw.index)
-                except ValueError:
-                    # Fallback for imputer mismatch
-                    imp_names = imputer.feature_names_in_ if hasattr(imputer, 'feature_names_in_') else X_cont.columns
-                    X_for_imp = X_cont[imp_names]
-                    X_imp = imputer.transform(X_for_imp)
-                    X_df = pd.DataFrame(X_imp, columns=imp_names, index=X_raw.index)
-                    for c in X_cont.columns:
-                        if c not in X_df.columns:
-                            X_df[c] = X_cont[c].values
-
-                # Re-attach categorical 'regime' if required by the model
-                if 'regime' in model_obj.feature_name_:
-                    X_df['regime'] = X_raw['regime']
-                
-                return X_df[model_obj.feature_name_]
+                # Native NaN Handling: Return the raw columns, LightGBM handles NaN dynamically.
+                return X_raw[model_obj.feature_name_]
 
             X_pt_df = prep_for_model(point, X_now)
             res_pt = point.predict(X_pt_df)[0]

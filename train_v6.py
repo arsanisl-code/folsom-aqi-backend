@@ -81,30 +81,42 @@ _OPTUNA_PARAMS = _load_optuna_params()
 def _point_params(horizon_h: int) -> dict:
     tuned = _get_optuna_best(horizon_h, "point")
     if tuned is not None:
-        return {
-            'objective':    'huber',
-            'alpha':        2.0,
-            'n_estimators': 4000,
+        # V8: For 48h, use MAE (Pinball α=0.5) instead of Huber to give
+        # equal gradient weight to fat-tail smoke events (no outlier dampening)
+        if horizon_h >= 48:
+            obj, alpha = 'mae', None
+        else:
+            obj, alpha = 'huber', 2.0
+        params = {
+            'objective':    obj,
+            'n_estimators': 10000,
             'n_jobs':       -1,
             'verbosity':    -1,
             'random_state': 42,
             'bagging_freq': 1,
             **tuned,
         }
+        if alpha is not None:
+            params['alpha'] = alpha
+        return params
     base = dict(
-        objective='huber', alpha=2.0, n_estimators=4000,
+        n_estimators=10000,
         learning_rate=0.01, subsample=0.8, subsample_freq=1,
         colsample_bytree=0.8, random_state=42, n_jobs=-1, verbosity=-1,
     )
     if horizon_h <= 12:
-        base.update(num_leaves=63, max_depth=8, min_child_samples=20,
+        base.update(objective='huber', alpha=2.0,
+                    num_leaves=63, max_depth=8, min_child_samples=20,
                     reg_alpha=0.1, reg_lambda=1.0)
     elif horizon_h <= 24:
-        base.update(num_leaves=63, max_depth=7, min_child_samples=40,
+        base.update(objective='huber', alpha=2.0,
+                    num_leaves=63, max_depth=7, min_child_samples=40,
                     reg_alpha=1.0, reg_lambda=2.0)
     else:
-        base.update(num_leaves=31, max_depth=5, min_child_samples=60,
-                    reg_alpha=2.0, reg_lambda=5.0)
+        # V8: MAE for 48h + deeper trees to exploit momentum features
+        base.update(objective='mae',
+                    num_leaves=63, max_depth=7, min_child_samples=40,
+                    reg_alpha=1.0, reg_lambda=2.0)
     return base
 
 
@@ -115,24 +127,17 @@ def _quantile_params(alpha: float, horizon_h: int) -> dict:
         return {
             'objective':    'quantile',
             'alpha':        alpha,
-            'n_estimators': 1500,
+            'n_estimators': 10000,
             'n_jobs':       -1,
             'verbosity':    -1,
             'random_state': 42,
             'bagging_freq': 1,
             **tuned,
         }
-    base = dict(
-        objective='quantile', alpha=alpha, n_estimators=1500,
-        learning_rate=0.01, random_state=42, n_jobs=-1, verbosity=-1,
+    return dict(
+        objective='quantile', alpha=alpha, n_estimators=10000,
+        learning_rate=0.01, num_leaves=63, max_depth=7, min_child_samples=40, verbosity=-1,
     )
-    if horizon_h <= 12:
-        base.update(num_leaves=31, max_depth=6)
-    elif horizon_h <= 24:
-        base.update(num_leaves=15, max_depth=4)
-    else:
-        base.update(num_leaves=15, max_depth=3)
-    return base
 
 
 # ─── Training ─────────────────────────────────────────────────────────────────
@@ -175,66 +180,35 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     if len(X_train) < 500:
         raise RuntimeError(f"Too few training rows ({len(X_train)}). Check data fetch.")
 
-    # 4. Impute continuous columns only — preserve the categorical 'regime'
-    #    Strategy: separate regime, impute the rest, then reattach.
-    regime_train = X_train['regime']
-    regime_val   = X_val['regime']
-    X_train_cont = X_train.drop(columns=['regime'])
-    X_val_cont   = X_val.drop(columns=['regime'])
-
-    imputer = SimpleImputer(strategy='median')
-    X_train_imp_np = imputer.fit_transform(X_train_cont)
-    
-    # Robust column reconstruction — handle case where imputer drops all-NaN cols
-    if X_train_imp_np.shape[1] != X_train_cont.shape[1]:
-        print(f"  [WARNING] Imputer dropped {X_train_cont.shape[1] - X_train_imp_np.shape[1]} columns. Reconstructing...")
-        try:
-            # Reconstruct with 0s for dropped columns to maintain 104-feature shape
-            kept_cols = X_train_cont.columns[imputer.get_support()]
-            X_train_imp = pd.DataFrame(X_train_imp_np, columns=kept_cols, index=X_train.index)
-            for col in set(X_train_cont.columns) - set(kept_cols):
-                X_train_imp[col] = 0.0
-            X_train_imp = X_train_imp[X_train_cont.columns] # Reorder
-        except:
-            X_train_imp = pd.DataFrame(X_train_imp_np, columns=X_train_cont.columns[:X_train_imp_np.shape[1]], index=X_train.index)
-    else:
-        X_train_imp = pd.DataFrame(X_train_imp_np, columns=X_train_cont.columns, index=X_train.index)
-
-    X_val_imp_np = imputer.transform(X_val_cont)
-    if X_val_imp_np.shape[1] != X_val_cont.shape[1]:
-        try:
-            kept_cols = X_val_cont.columns[imputer.get_support()]
-            X_val_imp = pd.DataFrame(X_val_imp_np, columns=kept_cols, index=X_val.index)
-            for col in set(X_val_cont.columns) - set(kept_cols):
-                X_val_imp[col] = 0.0
-            X_val_imp = X_val_imp[X_val_cont.columns]
-        except:
-            X_val_imp = pd.DataFrame(X_val_imp_np, columns=X_val_cont.columns[:X_val_imp_np.shape[1]], index=X_val.index)
-    else:
-        X_val_imp = pd.DataFrame(X_val_imp_np, columns=X_val_cont.columns, index=X_val.index)
-
-    # Reattach regime as categorical
-    X_train_imp['regime'] = regime_train.values
-    X_train_imp['regime'] = pd.Categorical(X_train_imp['regime'])
-    X_val_imp['regime'] = regime_val.values
-    X_val_imp['regime'] = pd.Categorical(X_val_imp['regime'])
-
-    imputer_path = MODELS_DIR / f"imputer_{horizon_h}h.pkl"
-    joblib.dump(imputer, imputer_path)
-    print(f"  Imputer saved → {imputer_path}")
-
     # Tell LightGBM which columns are categorical
     cat_features = ['regime']
 
-    # ── Leakage-free early stopping ──────────────────────────────────────
-    ES_DAYS = 30
-    es_cutoff = val_cutoff - timedelta(days=ES_DAYS)
-    es_within = X_train_imp.index >= es_cutoff
+    # 4. Temporal Sample Weighting
+    # 2021-2022 data is valuable for extreme wildfire memory, but less representative 
+    # of current atmospheric dynamics. De-weight it (0.5) to prioritize recent patterns.
+    weights = np.ones(len(y_train))
+    weights[X_train.index.year <= 2022] = 0.5
 
-    X_fit_df = X_train_imp[~es_within]
+    # ── Leakage-free early stopping ──────────────────────────────────────
+    # Using a 10% stratified random sample (by month) so the evaluation set
+    # sees all seasons, not just the chronologically last 30 days (winter).
+    from sklearn.model_selection import train_test_split
+    es_within = np.zeros(len(X_train), dtype=bool)
+    _, es_idx = train_test_split(
+        np.arange(len(X_train)), 
+        test_size=0.10, 
+        random_state=42, 
+        stratify=X_train.index.month
+    )
+    es_within[es_idx] = True
+
+    X_fit_df = X_train[~es_within]
     y_fit    = y_train[~es_within]
-    X_es_df  = X_train_imp[es_within]
+    w_fit    = weights[~es_within]
+    
+    X_es_df  = X_train[es_within]
     y_es     = y_train[es_within]
+    w_es     = weights[es_within]
 
     print(f"  Fit rows: {len(X_fit_df):,}  |  ES eval rows: {len(X_es_df):,}")
 
@@ -243,32 +217,40 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     point_model = lgb.LGBMRegressor(**_point_params(horizon_h))
     point_model.fit(
         X_fit_df, y_fit,
+        sample_weight=w_fit,
         eval_set=[(X_es_df, y_es)],
-        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(50, verbose=True)],
+        eval_sample_weight=[w_es],
+        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(100, verbose=True)],
         categorical_feature=cat_features,
     )
     point_path = MODELS_DIR / f"lgbm_point_{horizon_h}h.pkl"
     joblib.dump(point_model, point_path)
     print(f"  Point model saved → {point_path}  (best iter: {point_model.best_iteration_})")
 
-    # 5b. Lower quantile (no early stopping)
+    # 5b. Lower quantile (with early stopping)
     print("  Training lower quantile model (q005)...")
     q05_model = lgb.LGBMRegressor(**_quantile_params(0.005, horizon_h))
     q05_model.fit(
-        X_train_imp, y_train,
-        callbacks=[lgb.log_evaluation(200)],
+        X_fit_df, y_fit,
+        sample_weight=w_fit,
+        eval_set=[(X_es_df, y_es)],
+        eval_sample_weight=[w_es],
+        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(100, verbose=False)],
         categorical_feature=cat_features,
     )
     q05_path = MODELS_DIR / f"lgbm_q05_{horizon_h}h.pkl"
     joblib.dump(q05_model, q05_path)
     print(f"  Q005 model saved → {q05_path}")
 
-    # 5c. Upper quantile (no early stopping)
+    # 5c. Upper quantile (with early stopping)
     print("  Training upper quantile model (q995)...")
     q95_model = lgb.LGBMRegressor(**_quantile_params(0.995, horizon_h))
     q95_model.fit(
-        X_train_imp, y_train,
-        callbacks=[lgb.log_evaluation(200)],
+        X_fit_df, y_fit,
+        sample_weight=w_fit,
+        eval_set=[(X_es_df, y_es)],
+        eval_sample_weight=[w_es],
+        callbacks=[lgb.log_evaluation(200), lgb.early_stopping(100, verbose=False)],
         categorical_feature=cat_features,
     )
     q95_path = MODELS_DIR / f"lgbm_q95_{horizon_h}h.pkl"
@@ -276,10 +258,10 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     print(f"  Q995 model saved → {q95_path}")
 
     # 6. Validation metrics
-    if len(X_val_imp) > 0:
-        val_point_res = point_model.predict(X_val_imp)
-        val_q05_res   = q05_model.predict(X_val_imp)
-        val_q95_res   = q95_model.predict(X_val_imp)
+    if len(X_val) > 0:
+        val_point_res = point_model.predict(X_val)
+        val_q05_res   = q05_model.predict(X_val)
+        val_q95_res   = q95_model.predict(X_val)
 
         base_aqi  = X_val['aqi_current'].values
         val_point = val_point_res + base_aqi
