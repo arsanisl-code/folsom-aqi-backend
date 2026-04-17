@@ -1353,6 +1353,10 @@ def render_about():
 def render_footer():
     st.markdown(
         '<div class="page-footer">'
+        '<div style="margin-bottom: 0.5rem; opacity: 0.7; font-size: 11px; letter-spacing: 0.02em;">'
+        'MEDICAL DISCLAIMER: For informational purposes only. Predicted data is not a substitute for professional '
+        'medical advice, diagnosis, or treatment. Always follow local health authority guidelines during high-AQI events.'
+        '</div>'
         'Built with LightGBM · Open-Meteo · AirNow · NASA FIRMS · Streamlit &nbsp;·&nbsp; Folsom, CA '
         '&nbsp;·&nbsp; FLC Los Rios STEM Fair 2026'
         '</div>',
