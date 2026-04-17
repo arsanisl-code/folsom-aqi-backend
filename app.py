@@ -251,13 +251,12 @@ def _build_context(data: dict) -> str:
 
 def _call_gemini(prompt: str, api_key: str) -> str:
     """
-    Call Gemini 2.0 Flash REST API directly (no SDK needed).
-    Returns the text response or an error string.
+    Call Gemini REST API directly. Returns the text response or a specific error string.
     """
     if not api_key:
         return (
-            "⚠️ GEMINI_API_KEY is not set. "
-            "Add it to your Streamlit secrets to enable AI responses."
+            "\u26a0\ufe0f GEMINI_API_KEY is not set. "
+            "Add it to Streamlit Cloud Secrets to enable AI responses."
         )
     payload = {
         "system_instruction": {"parts": [{"text": _GEMINI_BASE_SYSTEM + "\n\n" + _EXPERT_BLOCK}]},
@@ -270,15 +269,26 @@ def _call_gemini(prompt: str, api_key: str) -> str:
             json=payload,
             timeout=20,
         )
-        resp.raise_for_status()
+        if not resp.ok:
+            print(f"[ai] Gemini HTTP {resp.status_code}: {resp.text[:500]}", file=sys.stderr)
+            if resp.status_code == 400:
+                return "\u26a0\ufe0f The API key appears to be invalid. Please check Streamlit Cloud Secrets."
+            if resp.status_code == 429:
+                return "The Navigator is busy right now. Please wait a moment and try again."
+            if resp.status_code in (500, 503):
+                return "The AI service is temporarily unavailable. Please try again in a minute."
+            return f"The Navigator encountered an error (HTTP {resp.status_code}). Please try again."
         result = resp.json()
-        return result["candidates"][0]["content"]["parts"][0]["text"].strip()
+        candidates = result.get("candidates", [])
+        if not candidates:
+            print(f"[ai] Gemini returned no candidates: {result}", file=sys.stderr)
+            return "The Navigator received an unexpected response. Please try again."
+        return candidates[0]["content"]["parts"][0]["text"].strip()
     except requests.exceptions.Timeout:
         return "The AI took too long to respond. Please try again."
     except Exception as exc:
-        # Mask the raw exception so as not to leak the API key in the URL
-        print(f"[ai] Gemini call failed: {exc}", file=sys.stderr)
-        return "The Navigator is temporarily offline due to high traffic. Please try again in a few moments."
+        print(f"[ai] Gemini call failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return "The Navigator encountered an unexpected error. Please try again."
 
 
 def ask_ai(question: str, data: dict) -> str:
