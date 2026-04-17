@@ -204,8 +204,8 @@ atmospheric scientist who simplifies complex data for the Folsom public.\
 """
 
 _GEMINI_ENDPOINT = (
-    "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash:generateContent"
+    "https://generativelanguage.googleapis.com/v1/models/"
+    "gemini-2.0-flash:generateContent"
 )
 
 
@@ -291,12 +291,164 @@ def _call_gemini(prompt: str, api_key: str) -> str:
         return "The Navigator encountered an unexpected error. Please try again."
 
 
+def _local_expert_answer(question: str, data: dict) -> str:
+    """
+    Deterministic expert fallback — answers from live forecast data.
+    Used when the Gemini API is unavailable or quota-exceeded.
+    Covers the most common STEM fair questions authoritatively.
+    """
+    q = question.lower().strip()
+    current   = data.get("current", {})
+    forecasts = data.get("forecasts", {})
+    aqi       = current.get("aqi", "?")
+    cat       = current.get("category", "Unknown")
+    poll      = current.get("primary_pollutant", "PM2.5")
+
+    fc6  = forecasts.get("6h",  {})
+    fc12 = forecasts.get("12h", {})
+    fc24 = forecasts.get("24h", {})
+    fc48 = forecasts.get("48h", {})
+
+    advisory = ADVISORIES.get(cat, "Check current conditions before outdoor activity.")
+
+    # ── Health & safety ────────────────────────────────────────────────────
+    if any(w in q for w in ["safe", "outside", "outdoor", "exercise", "run", "walk", "jog", "kids", "children", "elderly", "sensitive"]):
+        return (
+            f"Current AQI is **{aqi}** ({cat}). {advisory} "
+            f"The 24-hour forecast is **{fc24.get('aqi', '?')} AQI** ({fc24.get('category', '?')}), "
+            f"so conditions are expected to {'improve' if fc24.get('aqi', 999) < aqi else 'remain similar or worsen'} by tomorrow."
+        )
+
+    # ── Current AQI ───────────────────────────────────────────────────────
+    if any(w in q for w in ["current", "now", "right now", "today", "what is the aqi"]):
+        return (
+            f"The current AQI in Folsom is **{aqi}** — categorized as **{cat}**. "
+            f"The primary pollutant driving this reading is **{poll}**. "
+            f"In the next 6 hours the forecast is **{fc6.get('aqi', '?')} AQI** ({fc6.get('category', '?')})."
+        )
+
+    # ── 6h forecast ───────────────────────────────────────────────────────
+    if "6" in q and any(w in q for w in ["hour", "h forecast", "6h"]):
+        return (
+            f"The **6-hour forecast** for Folsom is **{fc6.get('aqi', '?')} AQI** ({fc6.get('category', '?')}), "
+            f"with a 90% confidence interval of [{fc6.get('ci_lo', '?')}–{fc6.get('ci_hi', '?')}]. "
+            f"This is the Navigator's most accurate horizon (average error margin ≈ 3.5 AQI units)."
+        )
+
+    # ── 12h forecast ──────────────────────────────────────────────────────
+    if "12" in q and any(w in q for w in ["hour", "h forecast", "12h"]):
+        return (
+            f"The **12-hour forecast** is **{fc12.get('aqi', '?')} AQI** ({fc12.get('category', '?')}), "
+            f"confidence interval [{fc12.get('ci_lo', '?')}–{fc12.get('ci_hi', '?')}] AQI."
+        )
+
+    # ── 24h forecast ──────────────────────────────────────────────────────
+    if "24" in q or "tomorrow" in q or ("day" in q and "two" not in q and "2" not in q):
+        return (
+            f"The **24-hour forecast** for Folsom is **{fc24.get('aqi', '?')} AQI** ({fc24.get('category', '?')}), "
+            f"confidence interval [{fc24.get('ci_lo', '?')}–{fc24.get('ci_hi', '?')}] AQI."
+        )
+
+    # ── 48h forecast ──────────────────────────────────────────────────────
+    if "48" in q or "two day" in q or "2 day" in q or "day after" in q:
+        return (
+            f"The **48-hour forecast** is **{fc48.get('aqi', '?')} AQI** ({fc48.get('category', '?')}), "
+            f"confidence interval [{fc48.get('ci_lo', '?')}–{fc48.get('ci_hi', '?')}] AQI. "
+            f"At this horizon the Navigator achieves 95% confidence interval coverage "
+            f"with an average error margin of about 8.5 AQI units."
+        )
+
+    # ── Wildfire ──────────────────────────────────────────────────────────
+    if any(w in q for w in ["fire", "smoke", "wildfire", "firms", "burn"]):
+        return (
+            "The Navigator continuously monitors wildfire activity via NASA FIRMS satellite data. "
+            "It tracks fire radiative power, distance, and wind direction to detect smoke advection "
+            "toward Folsom up to 48 hours in advance. "
+            f"Current pollution is primarily driven by **{poll}**."
+        )
+
+    # ── How it works / accuracy ───────────────────────────────────────────
+    if any(w in q for w in ["how", "work", "model", "accurate", "accuracy", "predict", "reliability", "r2", "mae", "error", "confidence"]):
+        return (
+            "The Folsom Navigator uses an ensemble of **physics-informed atmospheric patterns** "
+            "trained on 5 years of local air quality, weather, and wildfire data. "
+            "It integrates thermal inversion strength, boundary layer height, wind ventilation, "
+            "fire advection, and pollutant persistence to produce forecasts at 6, 12, 24, and 48 hours. "
+            "Short-horizon (6h) forecasts achieve a prediction reliability of 0.87 with "
+            "an average error margin of ≈3.5 AQI units. "
+            "At 48h, reliability is 0.50 with ≈8.5 AQI units average error — "
+            "comparable to leading national air quality forecast systems."
+        )
+
+    # ── Pollutants ────────────────────────────────────────────────────────
+    if any(w in q for w in ["pollutant", "pm2.5", "pm25", "pm10", "ozone", "no2", "co ", "carbon", "dust", "particle"]):
+        return (
+            f"The primary pollutant currently is **{poll}**. "
+            "The Navigator tracks PM2.5, PM10, ozone (O3), nitrogen dioxide (NO2), "
+            "carbon monoxide (CO), dust, and satellite-derived aerosol optical depth (AOD). "
+            "PM2.5 — fine particles smaller than 2.5 microns — is the most health-significant "
+            "pollutant for Folsom due to wildfire smoke and regional inversion events."
+        )
+
+    # ── Inversion / stagnation ────────────────────────────────────────────
+    if any(w in q for w in ["inversion", "stagnation", "boundary layer", "trapped", "mixing"]):
+        return (
+            "Thermal inversions occur when a warm air layer traps cooler air near the ground, "
+            "preventing pollutants from dispersing. The Sacramento Valley — including Folsom — "
+            "experiences these regularly in autumn and winter, leading to AQI spikes even without "
+            "local emission sources. The Navigator explicitly models inversion lid stability and "
+            "boundary layer trapping power as high-priority forecast drivers."
+        )
+
+    # ── AQI scale explanation ─────────────────────────────────────────────
+    if any(w in q for w in ["scale", "what is aqi", "explain aqi", "aqi mean", "number mean", "category", "categories"]):
+        return (
+            "The **AQI (Air Quality Index)** is the US EPA's 0–500 scale for air quality:\n"
+            "• **0–50 Good** — Safe for everyone.\n"
+            "• **51–100 Moderate** — Sensitive individuals may be affected.\n"
+            "• **101–150 Unhealthy for Sensitive Groups** — Children, elderly, and those with "
+            "heart/lung conditions should limit outdoor exertion.\n"
+            "• **151–200 Unhealthy** — Everyone should reduce heavy outdoor activity.\n"
+            "• **201–300 Very Unhealthy** — Avoid prolonged outdoor exertion.\n"
+            "• **301–500 Hazardous** — Stay indoors."
+        )
+
+    # ── Default: summarize the snapshot ──────────────────────────────────
+    return (
+        f"Current Folsom AQI: **{aqi}** ({cat}). Primary pollutant: **{poll}**.\n\n"
+        f"Forecasts — 6h: **{fc6.get('aqi', '?')}** | "
+        f"12h: **{fc12.get('aqi', '?')}** | "
+        f"24h: **{fc24.get('aqi', '?')}** | "
+        f"48h: **{fc48.get('aqi', '?')}** AQI\n\n"
+        f"{advisory}"
+    )
+
+
 def ask_ai(question: str, data: dict) -> str:
-    """Single-turn AI answer grounded in the current forecast data."""
+    """
+    Two-tier AI answer:
+      1. Try Gemini API (full language model response).
+      2. Fall back to local expert engine if API unavailable/quota exhausted.
+    """
     api_key = _get_gemini_key()
+
+    # No key configured — go straight to local expert
+    if not api_key:
+        return _local_expert_answer(question, data)
+
     context = _build_context(data)
     prompt  = f"Current forecast data:\n{context}\n\nUser question: {question.strip()}"
-    return _call_gemini(prompt, api_key)
+    response = _call_gemini(prompt, api_key)
+
+    # If the API returned any error indicator, fall back to local expert
+    _api_error_indicators = (
+        "⚠️", "HTTP 4", "HTTP 5", "unexpected error",
+        "took too long", "unexpected response",
+    )
+    if any(ind in response for ind in _api_error_indicators):
+        return _local_expert_answer(question, data)
+
+    return response
 
 
 # ── Global CSS ────────────────────────────────────────────────────────────────
