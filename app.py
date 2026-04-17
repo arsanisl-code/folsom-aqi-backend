@@ -443,7 +443,8 @@ def ask_ai(question: str, data: dict) -> str:
     # If the API returned any error indicator, fall back to local expert
     _api_error_indicators = (
         "⚠️", "HTTP 4", "HTTP 5", "unexpected error",
-        "took too long", "unexpected response",
+        "took too long", "unexpected response", "busy right now",
+        "temporarily unavailable"
     )
     if any(ind in response for ind in _api_error_indicators):
         return _local_expert_answer(question, data)
@@ -911,7 +912,7 @@ def make_gauge_figure(aqi_value: float, category: str, color: str) -> go.Figure:
                 "ticktext":  ["0", "50", "100", "150", "200", "300", "500"],
                 "tickcolor": "#374151",
                 "tickfont":  {"size": 10, "color": "#6b7280"},
-                "gridcolor": "#1f2937",
+                "tickcolor": "#1f2937",
             },
             "bar": {
                 "color":     color,
