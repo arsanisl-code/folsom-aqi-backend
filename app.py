@@ -1335,18 +1335,14 @@ def render_about():
         st.markdown(
             """
             <div style="color:#9ca3af;font-size:13px;line-height:1.75;">
-            This dashboard uses a machine learning model trained on 2+ years of hourly
-            air quality and meteorological data for Folsom, CA.<br><br>
-            The model (<strong style="color:#f9fafb;">LightGBM</strong>) produces separate
-            forecasts for <strong style="color:#f9fafb;">6, 12, 24, and 48-hour horizons</strong>.
-            Confidence intervals represent the 1st–99th percentile range of expected outcomes
-            based on quantile regression.<br><br>
+            This dashboard uses a <strong style="color:#f9fafb;">physics-informed machine learning ensemble</strong> trained on <strong style="color:#f9fafb;">5 years</strong> (2020–2024) of hourly air quality, meteorological, and wildfire data for Folsom, CA.<br><br>
+            The system produces separate forecasts at <strong style="color:#f9fafb;">6, 12, 24, and 48-hour horizons</strong>, with 90% confidence intervals derived from quantile regression. It explicitly models atmospheric drivers including thermal inversions, boundary layer height, wind ventilation, and NASA FIRMS fire advection.<br><br>
             <strong style="color:#f9fafb;">Data sources:</strong><br>
             &bull; Current readings: AirNow (U.S. EPA sensor network)<br>
             &bull; Weather inputs: Open-Meteo historical and forecast API<br>
-            &bull; Training data: 2022–present, Folsom monitoring station<br><br>
-            <strong style="color:#f9fafb;">AI layer:</strong> Plain-English summaries and
-            the Q&amp;A chatbox are powered by Google Gemini 2.0 Flash.<br><br>
+            &bull; Wildfire / fire advection: NASA FIRMS satellite (real-time)<br>
+            &bull; Training data: 2020–2024, Folsom monitoring station<br><br>
+            <strong style="color:#f9fafb;">AI layer:</strong> Plain-English summaries and the Navigator chatbot are powered by Google Gemini.<br><br>
             <em>Presented at FLC Los Rios STEM Fair 2026</em>
             </div>
             """,
@@ -1357,7 +1353,7 @@ def render_about():
 def render_footer():
     st.markdown(
         '<div class="page-footer">'
-        'Built with LightGBM + Streamlit &nbsp;·&nbsp; Folsom, CA '
+        'Built with LightGBM · Open-Meteo · AirNow · NASA FIRMS · Streamlit &nbsp;·&nbsp; Folsom, CA '
         '&nbsp;·&nbsp; FLC Los Rios STEM Fair 2026'
         '</div>',
         unsafe_allow_html=True,
