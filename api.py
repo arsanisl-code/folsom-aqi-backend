@@ -36,6 +36,7 @@ async def lifespan(app: FastAPI):
     Load all 12 models and imputers into memory at startup.
     This is the only time we touch the disk for model files.
     Keeps per-request latency < 200ms.
+    """
     # ── V9 Optimization ───────────────────────────────────────────────────────
     # The FastAPI server NO LONGER pre-loads the 12 LightGBM models into RAM.
     # Because Render is memory-constrained (512MB) and the /forecast endpoint 
