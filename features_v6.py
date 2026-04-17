@@ -203,11 +203,29 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
     X['fwd_humidity']     = df['relative_humidity_2m'].shift(-horizon_h)
     X['fwd_pressure']     = df['surface_pressure'].shift(-horizon_h)
     X['fwd_precipitation'] = df['precipitation'].shift(-horizon_h)
+    # V7: Forward wind direction and components (Delta Breeze detection capability)
+    fwd_wind_dir = df['wind_direction_10m'].shift(-horizon_h)
+    fwd_wind_dir_rad = np.radians(fwd_wind_dir)
+    X['fwd_wind_dir_sin'] = np.sin(fwd_wind_dir_rad)
+    X['fwd_wind_dir_cos'] = np.cos(fwd_wind_dir_rad)
+    X['fwd_wind_u'] = X['fwd_wind_speed'] * X['fwd_wind_dir_cos']
+    X['fwd_wind_v'] = X['fwd_wind_speed'] * X['fwd_wind_dir_sin']
+
+    # V7: Strict Future Rolling Windows (Anti-Temporal Leakage). 
+    # Takes [T+1 to T+horizon_h] safely by backward rolling + forward shift.
+    X['fwd_temperature_mean'] = df['temperature_2m'].rolling(horizon_h, min_periods=1).mean().shift(-horizon_h)
+    X['fwd_wind_speed_mean']  = df['wind_speed_10m'].rolling(horizon_h, min_periods=1).mean().shift(-horizon_h)
+    X['fwd_humidity_mean']    = df['relative_humidity_2m'].rolling(horizon_h, min_periods=1).mean().shift(-horizon_h)
+    X['fwd_pressure_mean']    = df['surface_pressure'].rolling(horizon_h, min_periods=1).mean().shift(-horizon_h)
+    X['fwd_precip_accum']     = df['precipitation'].rolling(horizon_h, min_periods=1).sum().shift(-horizon_h)
 
     # Forecast-time interactions (computed at the target hour, not current hour)
     # Ventilation coefficient at T+h: measures how well the atmosphere can
     # disperse pollutants at the time the prediction lands.
     X['fwd_ventilation']  = X['fwd_blh'] * X['fwd_wind_speed']
+    VENT_THRESHOLD = 3000.0
+    X['fwd_vent_deficit'] = (VENT_THRESHOLD - X['fwd_ventilation']).clip(lower=0)
+    X = X.copy()
 
     # Fire danger index at T+h: VPD × wind at the forecast hour
     fwd_es = 0.6108 * np.exp(17.27 * X['fwd_temperature'] / (X['fwd_temperature'] + 237.3))

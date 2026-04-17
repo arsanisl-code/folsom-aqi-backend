@@ -1,38 +1,38 @@
 {
-  "trained_at": "2026-03-27T21:58:14.870762",
+  "trained_at": "2026-04-16T16:49:35.129825",
   "architecture": "V6 Physics-Informed + Regime Soft-Routing",
-  "total_features": 138,
+  "total_features": 148,
   "categorical_features": [
     "regime"
   ],
   "horizons": [
     {
       "horizon_h": 6,
-      "val_mae": 2.19,
-      "val_r2": 0.942,
-      "val_coverage": 96.2,
-      "avg_width": 15.7
+      "val_mae": 2.29,
+      "val_r2": 0.937,
+      "val_coverage": 97.6,
+      "avg_width": 21.2
     },
     {
       "horizon_h": 12,
-      "val_mae": 4.13,
-      "val_r2": 0.836,
-      "val_coverage": 95.0,
-      "avg_width": 28.4
+      "val_mae": 4.32,
+      "val_r2": 0.806,
+      "val_coverage": 95.1,
+      "avg_width": 29.7
     },
     {
       "horizon_h": 24,
-      "val_mae": 7.72,
-      "val_r2": 0.47,
-      "val_coverage": 97.7,
-      "avg_width": 43.1
+      "val_mae": 7.69,
+      "val_r2": 0.424,
+      "val_coverage": 97.8,
+      "avg_width": 44.0
     },
     {
       "horizon_h": 48,
-      "val_mae": 9.75,
-      "val_r2": 0.115,
-      "val_coverage": 98.7,
-      "avg_width": 59.9
+      "val_mae": 9.32,
+      "val_r2": 0.135,
+      "val_coverage": 99.6,
+      "avg_width": 55.8
     }
   ]
 }
