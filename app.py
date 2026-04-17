@@ -205,7 +205,7 @@ atmospheric scientist who simplifies complex data for the Folsom public.\
 
 _GEMINI_ENDPOINT = (
     "https://generativelanguage.googleapis.com/v1beta/models/"
-    "gemini-2.5-flash-lite:generateContent"
+    "gemini-2.5-flash:generateContent"
 )
 
 
@@ -1119,7 +1119,7 @@ def render_ai_chat(data: dict):
                 else:
                     msgs_html += (
                         f'<div class="nav-bubble-ai">'
-                        f'<div class="nav-ai-label">🧭 V6 Navigator</div>'
+                        f'<div class="nav-ai-label">🧭 NAVIGATOR</div>'
                         f'{msg["content"]}'
                         f'</div>'
                     )

@@ -397,7 +397,6 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
     try:
         X_hist, _ = engineer_features(df, horizon_h=6)
         m6        = models[6]
-        imp6      = m6["imputer"]
         pt6       = m6["point"]
         q05_6     = m6["q05"]
         q95_6     = m6["q95"]
@@ -412,26 +411,11 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
                 categories=[0, 1, 2]
             )
             
-            # Helper: impute continuous features, re-attach regime, predict
+            # Helper: select model features and predict (V9: LightGBM handles NaN natively)
             def _hist_predict(model_obj, X_src):
                 feats = model_obj.feature_name_
                 X_sel = X_src[feats].copy()
-                # Strip regime before imputer (imputer only knows continuous cols)
-                if 'regime' in X_sel.columns:
-                    regime_col = X_sel['regime'].copy()
-                    X_cont = X_sel.drop(columns=['regime'])
-                else:
-                    regime_col = None
-                    X_cont = X_sel
-
-                X_imp = pd.DataFrame(
-                    imp6.transform(X_cont),
-                    columns=X_cont.columns, index=X_src.index
-                )
-                # Re-attach regime if the model needs it
-                if regime_col is not None and 'regime' in feats:
-                    X_imp['regime'] = regime_col.values
-                return model_obj.predict(X_imp[feats])
+                return model_obj.predict(X_sel)
 
             # 1. Point predictions
             preds = _hist_predict(pt6, X_window) + X_window['aqi_current'].values
