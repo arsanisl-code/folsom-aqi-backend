@@ -1,6 +1,6 @@
 {
-  "trained_at": "2026-04-16T20:05:23.449702",
-  "architecture": "V6 Physics-Informed + Regime Soft-Routing",
+  "trained_at": "2026-04-19T14:03:08",
+  "architecture": "V6 Physics-Informed + Regime Soft-Routing (48h retrained with V10 Optuna params)",
   "total_features": 174,
   "categorical_features": [
     "regime"
@@ -29,10 +29,10 @@
     },
     {
       "horizon_h": 48,
-      "val_mae": 8.9,
-      "val_r2": 0.194,
-      "val_coverage": 99.3,
-      "avg_width": 55.1
+      "val_mae": 8.85,
+      "val_r2": 0.178,
+      "val_coverage": 98.3,
+      "avg_width": 50.3
     }
   ]
 }

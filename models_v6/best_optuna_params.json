@@ -161,20 +161,22 @@
   "48h": {
     "point": {
       "best_params": {
-        "num_leaves": 54,
-        "max_depth": 6,
-        "min_data_in_leaf": 200,
-        "learning_rate": 0.01757039521743215,
-        "feature_fraction": 0.9724355632226173,
-        "bagging_fraction": 0.6069985725146577,
-        "reg_alpha": 2.2930318821122717,
-        "reg_lambda": 0.001183332909057341
+        "num_leaves": 72,
+        "max_depth": 10,
+        "min_child_samples": 42,
+        "learning_rate": 0.04190371370906655,
+        "feature_fraction": 0.6246205592861293,
+        "bagging_fraction": 0.49404966939115347,
+        "reg_alpha": 2.401829182752737,
+        "reg_lambda": 0.01917575407291713,
+        "path_smooth": 0.426935334905263,
+        "min_split_gain": 0.6884752923035218
       },
-      "best_cv_score": 15.0689,
-      "baseline_cv_score": 15.2029,
-      "improvement_pct": 0.9,
-      "n_trials_completed": 154,
-      "early_stopped": true
+      "best_cv_score": 8.799,
+      "baseline_cv_score": 8.9,
+      "improvement_pct": 1.1,
+      "n_trials_completed": 50,
+      "source": "V10 Optuna (train_ensemble.py) — validated MAE 8.799 vs V9 8.900"
     },
     "q01": {
       "best_params": {
