@@ -5,10 +5,7 @@ Returns pd.DataFrame with DatetimeIndex in America/Los_Angeles.
 Never crashes — returns last valid cache on any failure.
 """
 
-import hashlib
-import json
 import os
-import sys
 import time
 from datetime import datetime, timedelta
 from pathlib import Path
@@ -19,6 +16,10 @@ import requests
 import urllib.parse
 import io
 from dotenv import load_dotenv
+
+from logger import get_logger
+
+log = get_logger(__name__)
 
 load_dotenv()  # Load .env for AIRNOW_API_KEY
 
@@ -59,7 +60,7 @@ def fetch_firms_recent(days: int = 2) -> pd.DataFrame:
     """Fetch recent NASA FIRMS active fire data for the local region."""
     api_key = os.environ.get("FIRMS_MAP_KEY")
     if not api_key:
-        print("[data_fetcher] WARNING: FIRMS_MAP_KEY missing. Wildfire features will be 0.", file=sys.stderr)
+        log.warning("FIRMS_MAP_KEY missing. Wildfire features will be 0.")
         return pd.DataFrame()
         
     sensors = ["MODIS_NRT", "VIIRS_SNPP_NRT"]
@@ -75,7 +76,7 @@ def fetch_firms_recent(days: int = 2) -> pd.DataFrame:
                 if not df_sensor.empty:
                     dfs.append(df_sensor)
         except Exception as e:
-            print(f"[data_fetcher] FIRMS API error for {sensor}: {e}", file=sys.stderr)
+            log.error("FIRMS API error for %s: %s", sensor, e, exc_info=True)
             
     if not dfs:
         return pd.DataFrame()
@@ -146,7 +147,7 @@ def _fetch_with_retry(url: str, params: dict, max_retries: int = 4) -> dict:
     for attempt in range(max_retries):
         try:
             full_url = f"{url}?{urllib.parse.urlencode(params)}"
-            print(f"[data_fetcher] Attempt {attempt+1}: {full_url[:120]}...", file=sys.stderr)
+            log.info("Attempt %s: %s...", attempt + 1, full_url[:120])
             resp = requests.get(url, params=params, timeout=60)
             resp.raise_for_status()
             return resp.json()
@@ -157,21 +158,21 @@ def _fetch_with_retry(url: str, params: dict, max_retries: int = 4) -> dict:
                 body = exc.response.text[:500]
             except Exception:
                 pass
-            print(f"[data_fetcher] HTTP {status}: {body}", file=sys.stderr)
+            log.error("HTTP %s: %s", status, body)
             last_exc = exc
             # 429 = rate limited — wait much longer
             if status == 429:
                 retry_after = int(exc.response.headers.get("Retry-After", 30))
                 wait = max(retry_after, 30)
-                print(f"[data_fetcher] Rate limited! Waiting {wait}s...", file=sys.stderr)
+                log.warning("Rate limited! Waiting %ss...", wait)
                 time.sleep(wait)
                 continue
         except Exception as exc:
-            print(f"[data_fetcher] Attempt {attempt+1} failed: {exc}", file=sys.stderr)
+            log.error("Attempt %s failed: %s", attempt + 1, exc, exc_info=True)
             last_exc = exc
         wait = 2 ** (attempt + 1)
         if attempt < max_retries - 1:
-            print(f"[data_fetcher] Retrying in {wait}s...", file=sys.stderr)
+            log.info("Retrying in %ss...", wait)
             time.sleep(wait)
     raise RuntimeError(f"All {max_retries} retries failed for {url}: {last_exc}")
 
@@ -216,7 +217,7 @@ def fetch_air_quality_history(start_date: str, end_date: str) -> pd.DataFrame:
     cache = _cache_key(tag)
 
     if _cache_is_fresh(cache):
-        print(f"[data_fetcher] AQ cache hit: {cache}")
+        log.info("AQ cache hit: %s", cache)
         return pd.read_parquet(cache)
 
     params = {
@@ -231,12 +232,12 @@ def fetch_air_quality_history(start_date: str, end_date: str) -> pd.DataFrame:
         data = _fetch_with_retry(AQ_ENDPOINT, params)
         df   = _hourly_to_df(data, AQ_VARS)
         df.to_parquet(cache)
-        print(f"[data_fetcher] AQ data fetched: {len(df)} rows, saved to {cache}")
+        log.info("AQ data fetched: %s rows, saved to %s", len(df), cache)
         return df
     except Exception as exc:
-        print(f"[data_fetcher] ERROR fetching AQ history: {exc}", file=sys.stderr)
+        log.error("ERROR fetching AQ history: %s", exc, exc_info=True)
         if cache.exists():
-            print(f"[data_fetcher] Returning stale cache: {cache}", file=sys.stderr)
+            log.warning("Returning stale cache: %s", cache)
             return pd.read_parquet(cache)
         raise
 
@@ -251,7 +252,7 @@ def fetch_weather_history(start_date: str, end_date: str) -> pd.DataFrame:
     cache = _cache_key(tag)
 
     if _cache_is_fresh(cache):
-        print(f"[data_fetcher] WX cache hit: {cache}")
+        log.info("WX cache hit: %s", cache)
         return pd.read_parquet(cache)
 
     params = {
@@ -266,12 +267,12 @@ def fetch_weather_history(start_date: str, end_date: str) -> pd.DataFrame:
         data = _fetch_with_retry(ARCHIVE_ENDPOINT, params)
         df   = _hourly_to_df(data, WEATHER_VARS)
         df.to_parquet(cache)
-        print(f"[data_fetcher] WX data fetched: {len(df)} rows, saved to {cache}")
+        log.info("WX data fetched: %s rows, saved to %s", len(df), cache)
         return df
     except Exception as exc:
-        print(f"[data_fetcher] ERROR fetching weather history: {exc}", file=sys.stderr)
+        log.error("ERROR fetching weather history: %s", exc, exc_info=True)
         if cache.exists():
-            print(f"[data_fetcher] Returning stale cache: {cache}", file=sys.stderr)
+            log.warning("Returning stale cache: %s", cache)
             return pd.read_parquet(cache)
         raise
 
@@ -288,7 +289,7 @@ def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
     cache     = _cache_key(tag)
 
     if _cache_is_fresh(cache):
-        print(f"[data_fetcher] Recent combined cache hit: {cache}")
+        log.info("Recent combined cache hit: %s", cache)
         return pd.read_parquet(cache)
 
     # AQ: use past_days for history + forecast to ensure 'Today' is fully covered
@@ -331,13 +332,13 @@ def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
             merged['fire_min_dist_raw'] = 999.0
 
         merged.to_parquet(cache)
-        print(f"[data_fetcher] Recent combined: {len(merged)} rows")
+        log.info("Recent combined: %s rows", len(merged))
         return merged
 
     except Exception as exc:
-        print(f"[data_fetcher] ERROR fetching recent data: {exc}", file=sys.stderr)
+        log.error("ERROR fetching recent data: %s", exc, exc_info=True)
         if cache.exists():
-            print(f"[data_fetcher] Returning stale cache: {cache}", file=sys.stderr)
+            log.warning("Returning stale cache: %s", cache)
             return pd.read_parquet(cache)
         raise
 
@@ -350,7 +351,7 @@ def fetch_airnow_current() -> dict | None:
     """
     api_key = os.environ.get("AIRNOW_API_KEY", "")
     if not api_key:
-        print("[data_fetcher] AIRNOW_API_KEY not set, skipping AirNow fetch.", file=sys.stderr)
+        log.warning("AIRNOW_API_KEY not set, skipping AirNow fetch.")
         return None
 
     params = {
@@ -377,7 +378,7 @@ def fetch_airnow_current() -> dict | None:
                                  f"{best.get('HourObserved', 0):02d}:00:00",
         }
     except Exception as exc:
-        print(f"[data_fetcher] AirNow fetch failed: {exc}", file=sys.stderr)
+        log.error("AirNow fetch failed: %s", exc, exc_info=True)
         return None
 
 
@@ -401,7 +402,7 @@ def fetch_full_history() -> pd.DataFrame:
         s = current.strftime("%Y-%m-%d")
         e = next_chunk.strftime("%Y-%m-%d")
 
-        print(f"[data_fetcher] Fetching chunk {s} → {e}")
+        log.info("Fetching chunk %s → %s", s, e)
         aq_frames.append(fetch_air_quality_history(s, e))
         wx_frames.append(fetch_weather_history(s, e))
         current = next_chunk

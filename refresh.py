@@ -1,5 +1,5 @@
 """
-refresh.py — Called by cron every hour to update data/latest.json.
+refresh.py — Called by GitHub Actions every hour to update data/latest.json.
 Also called at the end of deploy.sh to prime the cache after deployment.
 
 Usage:
@@ -8,35 +8,40 @@ Usage:
     0 * * * * /opt/folsom-aqi/venv/bin/python /opt/folsom-aqi/refresh.py
 """
 
-import json
 import sys
 from datetime import datetime
-from pathlib import Path
 
 from dotenv import load_dotenv
 
 load_dotenv()
 
 from inference import predict_now
+from logger import get_logger
+
+log = get_logger(__name__)
 
 
 def main():
     start = datetime.now()
-    print(f"[refresh] Starting at {start.isoformat()}", flush=True)
+    log.info("Starting at %s", start.isoformat())
 
     try:
-        result = predict_now()
+        result  = predict_now()
         elapsed = (datetime.now() - start).total_seconds()
-        print(f"[refresh] Success in {elapsed:.1f}s", flush=True)
-        print(f"[refresh] Generated at: {result['generated_at']}", flush=True)
-        print(f"[refresh] Data freshness: {result['data_freshness_minutes']} min", flush=True)
-        print(f"[refresh] Current AQI: {result['current']['aqi']} ({result['current']['category']})", flush=True)
+        log.info("Success in %.1fs", elapsed)
+        log.info("Generated at: %s", result['generated_at'])
+        log.info("Data freshness: %s min", result['data_freshness_minutes'])
+        log.info(
+            "Current AQI: %s (%s)",
+            result['current']['aqi'],
+            result['current']['category'],
+        )
         for h, fc in result['forecasts'].items():
-            print(f"[refresh]   {h}: {fc['aqi']} AQI ({fc['category']})", flush=True)
+            log.info("  %s: %s AQI (%s)", h, fc['aqi'], fc['category'])
 
     except Exception as exc:
         elapsed = (datetime.now() - start).total_seconds()
-        print(f"[refresh] FAILED after {elapsed:.1f}s: {exc}", file=sys.stderr, flush=True)
+        log.critical("FAILED after %.1fs: %s", elapsed, exc, exc_info=True)
         sys.exit(1)
 
 

@@ -18,11 +18,16 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, r2_score
 
 from data_fetcher import fetch_full_history
-from features import engineer_features, get_feature_names
+from features_v6 import engineer_features, get_feature_names
+from logger import get_logger
+
+log = get_logger(__name__)
 
 # ─── Paths ────────────────────────────────────────────────────────────────────
 
-MODELS_DIR = Path("models")
+# Must match the directory used by inference.py so training and inference
+# always load from the same model artifacts.
+MODELS_DIR = Path("models_v6")
 DATA_DIR   = Path("data")
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
@@ -44,11 +49,10 @@ def _load_optuna_params() -> dict | None:
     try:
         with open(OPTUNA_PARAMS_PATH) as f:
             data = json.load(f)
-        print(f"[train] ✓ Loaded Optuna-tuned params from {OPTUNA_PARAMS_PATH}")
+        log.info("Loaded Optuna-tuned params from %s", OPTUNA_PARAMS_PATH)
         return data
     except Exception as exc:
-        print(f"[train] WARNING: Could not load {OPTUNA_PARAMS_PATH}: {exc}",
-              file=sys.stderr)
+        log.warning("Could not load %s: %s", OPTUNA_PARAMS_PATH, exc)
         return None
 
 
@@ -65,7 +69,7 @@ def _get_optuna_best(horizon_h: int, model_type: str) -> dict | None:
     entry = _OPTUNA_PARAMS.get(horizon_key, {}).get(model_type, {})
     best = entry.get("best_params")
     if best:
-        print(f"[train] Using Optuna-tuned params for {model_type} {horizon_key}")
+        log.info("Using Optuna-tuned params for %s %s", model_type, horizon_key)
     return best
 
 
@@ -180,9 +184,9 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     Train point + quantile models for one horizon.
     Returns dict with val MAE, coverage, and interval width.
     """
-    print(f"\n{'='*60}")
-    print(f"  Horizon: {horizon_h}h")
-    print(f"{'='*60}")
+    log.info("=" * 60)
+    log.info("  Horizon: %sh", horizon_h)
+    log.info("=" * 60)
 
     # 1. Build features
     X, y = engineer_features(df, horizon_h)
@@ -196,7 +200,7 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     X_train, y_train = X[train_mask], y[train_mask]
     X_val,   y_val   = X[val_mask],   y[val_mask]
 
-    print(f"  Train rows: {len(X_train):,}  |  Val rows: {len(X_val):,}")
+    log.info("  Train rows: %s  |  Val rows: %s", f"{len(X_train):,}", f"{len(X_val):,}")
 
     if len(X_train) < 500:
         raise RuntimeError(f"Too few training rows ({len(X_train)}). Check data fetch.")
@@ -207,7 +211,7 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     X_val_imp   = imputer.transform(X_val)
     imputer_path = MODELS_DIR / f"imputer_{horizon_h}h.pkl"
     joblib.dump(imputer, imputer_path)
-    print(f"  Imputer saved → {imputer_path}")
+    log.info("  Imputer saved → %s", imputer_path)
 
     # Wrap back as DataFrames WITH DatetimeIndex (needed for early stopping split)
     X_train_df = pd.DataFrame(X_train_imp, columns=X_train.columns, index=X_train.index)
@@ -217,11 +221,13 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     # CRITICAL: We must NOT use the final 60-day val set (which contains
     # validate.py's 30-day holdout) as eval_set. Instead, carve out the
     # last ES_DAYS of the TRAINING window as the early stopping eval set.
-    # Timeline:
-    #   [training fit data] [ES eval: 30d] [val_cutoff] [val set: 60d (includes validate.py 30d)]
+    #
+    # Three-zone timeline:
+    #   [training fit data] [ES eval: 30d] [val_cutoff] [val set: 60d]
+    #
     # The model trains on data before (val_cutoff - 30d).
     # Early stopping monitors on (val_cutoff - 30d) to val_cutoff.
-    # validate.py's 30-day window is completely unseen.
+    # The final 60-day val set (and any downstream holdout) is completely unseen.
     ES_DAYS = 30
     es_cutoff = val_cutoff - timedelta(days=ES_DAYS)
     es_within = X_train_df.index >= es_cutoff
@@ -231,10 +237,10 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     X_es_df  = X_train_df[es_within]
     y_es     = y_train[es_within]
 
-    print(f"  Fit rows: {len(X_fit_df):,}  |  ES eval rows: {len(X_es_df):,}")
+    log.info("  Fit rows: %s  |  ES eval rows: %s", f"{len(X_fit_df):,}", f"{len(X_es_df):,}")
 
     # 4a. Point forecast model with early stopping
-    print("  Training point model...")
+    log.info("  Training point model...")
     point_model = lgb.LGBMRegressor(**_point_params(horizon_h))
     point_model.fit(
         X_fit_df, y_fit,
@@ -243,26 +249,26 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     )
     point_path = MODELS_DIR / f"lgbm_point_{horizon_h}h.pkl"
     joblib.dump(point_model, point_path)
-    print(f"  Point model saved → {point_path}  (best iter: {point_model.best_iteration_})")
+    log.info("  Point model saved → %s  (best iter: %s)", point_path, point_model.best_iteration_)
 
     # 4b. Lower quantile (0.5th percentile)
     # NOTE: No early stopping for quantile models. At 1500 trees with lr=0.01,
     # overfitting risk is minimal and quantile loss on the small ES eval set
     # is too noisy, causing catastrophic early stops (e.g., iter=1).
-    print("  Training lower quantile model (q005)...")
+    log.info("  Training lower quantile model (q005)...")
     q05_model = lgb.LGBMRegressor(**_quantile_params(0.005, horizon_h))
     q05_model.fit(X_train_df, y_train, callbacks=[lgb.log_evaluation(200)])
     q05_path = MODELS_DIR / f"lgbm_q05_{horizon_h}h.pkl"
     joblib.dump(q05_model, q05_path)
-    print(f"  Q005 model saved → {q05_path}")
+    log.info("  Q005 model saved → %s", q05_path)
 
     # 4c. Upper quantile (99.5th percentile)
-    print("  Training upper quantile model (q995)...")
+    log.info("  Training upper quantile model (q995)...")
     q95_model = lgb.LGBMRegressor(**_quantile_params(0.995, horizon_h))
     q95_model.fit(X_train_df, y_train, callbacks=[lgb.log_evaluation(200)])
     q95_path = MODELS_DIR / f"lgbm_q95_{horizon_h}h.pkl"
     joblib.dump(q95_model, q95_path)
-    print(f"  Q995 model saved → {q95_path}")
+    log.info("  Q995 model saved → %s", q95_path)
 
     # 5. Validation metrics
     if len(X_val_df) > 0:
@@ -289,10 +295,10 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
         covered  = np.mean((y_val_abs >= val_q05) & (y_val_abs <= val_q95))
         avg_width = np.mean(val_q95 - val_q05)
 
-        print(f"\n  Val MAE:       {mae:.2f} AQI")
-        print(f"  Val R²:        {r2:.3f}")
-        print(f"  Val Coverage:  {covered*100:.1f}%  (target ≥ 90%)")
-        print(f"  Avg CI Width:  {avg_width:.1f} AQI")
+        log.info("  Val MAE:       %.2f AQI", mae)
+        log.info("  Val R²:        %.3f", r2)
+        log.info("  Val Coverage:  %.1f%%  (target ≥ 90%%)", covered * 100)
+        log.info("  Avg CI Width:  %.1f AQI", avg_width)
 
         return {
             "horizon_h":    horizon_h,
@@ -302,25 +308,25 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
             "avg_width":    round(avg_width, 1),
         }
     else:
-        print("  [WARN] No validation data available.")
+        log.warning("  No validation data available.")
         return {"horizon_h": horizon_h, "val_mae": None, "val_r2": None, "val_coverage": None, "avg_width": None}
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
 
 def main():
-    print("=" * 60)
-    print("  Folsom AQI Forecast — Training Pipeline")
-    print("=" * 60)
+    log.info("=" * 60)
+    log.info("  Folsom AQI Forecast — Training Pipeline")
+    log.info("=" * 60)
 
     # Step 1: Fetch historical data
-    print("\nStep 1: Fetching historical data (2022-01-01 → today)...")
+    log.info("Step 1: Fetching historical data (2021-01-01 → today)...")
     df = fetch_full_history()
     hist_path = DATA_DIR / "historical.parquet"
     df.to_parquet(hist_path)
-    print(f"  Saved merged history: {len(df):,} rows → {hist_path}")
-    print(f"  Date range: {df.index.min()} → {df.index.max()}")
-    print(f"  Columns: {list(df.columns)}")
+    log.info("  Saved merged history: %s rows → %s", f"{len(df):,}", hist_path)
+    log.info("  Date range: %s → %s", df.index.min(), df.index.max())
+    log.info("  Columns: %s", list(df.columns))
 
     # Check for required columns
     required = ['us_aqi', 'pm2_5', 'boundary_layer_height', 'wind_speed_10m',
@@ -329,51 +335,50 @@ def main():
                 'direct_radiation', 'soil_temperature_0_to_7cm']
     missing = [c for c in required if c not in df.columns]
     if missing:
-        print(f"\n[ERROR] Missing columns: {missing}", file=sys.stderr)
+        log.error("Missing required columns: %s", missing)
         sys.exit(1)
 
     # Validation cutoff: 60 days before today
     val_cutoff = datetime.now(tz=df.index.tz) - timedelta(days=60)
-    print(f"\n  Train/Val cutoff: {val_cutoff.strftime('%Y-%m-%d')}")
+    log.info("  Train/Val cutoff: %s", val_cutoff.strftime('%Y-%m-%d'))
 
     # Step 2: Train models for each horizon
-    print("\nStep 2: Training models for each horizon...")
+    log.info("Step 2: Training models for each horizon...")
     results = []
     for h in HORIZONS:
         metrics = train_horizon(df, h, val_cutoff)
         results.append(metrics)
 
     # Step 3: Print summary table
-    print("\n" + "=" * 60)
-    print("  TRAINING SUMMARY")
-    print("=" * 60)
-    print(f"  {'Horizon':<10} {'Val MAE':<12} {'Val R²':<10} {'Coverage':<12} {'Avg Width'}")
-    print(f"  {'-'*60}")
+    log.info("=" * 60)
+    log.info("  TRAINING SUMMARY")
+    log.info("=" * 60)
+    log.info("  %-10s %-12s %-10s %-12s %s", "Horizon", "Val MAE", "Val R²", "Coverage", "Avg Width")
     for r in results:
         mae = f"{r['val_mae']:.1f}" if r['val_mae'] is not None else "N/A"
         r2  = f"{r['val_r2']:.3f}" if r['val_r2'] is not None else "N/A"
         cov = f"{r['val_coverage']:.1f}%" if r['val_coverage'] is not None else "N/A"
         wid = f"{r['avg_width']:.1f}" if r['avg_width'] is not None else "N/A"
-        print(f"  {str(r['horizon_h'])+'h':<10} {mae:<12} {r2:<10} {cov:<12} {wid}")
+        log.info("  %-10s %-12s %-10s %-12s %s", f"{r['horizon_h']}h", mae, r2, cov, wid)
 
     # Step 4: Save feature names for inference alignment check
     feature_names = get_feature_names(6)
-    fn_path = MODELS_DIR / "feature_names.json"
+    fn_path = MODELS_DIR / "feature_names_v6.json"
     with open(fn_path, "w") as f:
         json.dump(feature_names, f, indent=2)
-    print(f"\n  Feature names saved → {fn_path}  ({len(feature_names)} features)")
+    log.info("  Feature names saved → %s  (%s features)", fn_path, len(feature_names))
 
     # Save training metrics
-    metrics_path = MODELS_DIR / "training_metrics.json"
+    metrics_path = MODELS_DIR / "training_metrics_v6.json"
     with open(metrics_path, "w") as f:
         json.dump({
             "trained_at": datetime.now().isoformat(),
             "horizons":   results,
         }, f, indent=2)
-    print(f"  Training metrics saved → {metrics_path}")
+    log.info("  Training metrics saved → %s", metrics_path)
 
-    print("\n✓ Training complete. Check 6h MAE — target is ≤ 8.0 AQI.")
-    print("  Next: run python validate.py")
+    log.info("Training complete. Check 6h MAE — target is ≤ 8.0 AQI.")
+    log.info("Next: run python refresh.py")
 
 
 if __name__ == "__main__":
