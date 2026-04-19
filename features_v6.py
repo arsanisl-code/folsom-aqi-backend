@@ -236,11 +236,26 @@ def _add_meteorological_features(
     # Satellite Aerosol Optical Depth (Smoke Plume Detection)
     # AOD detects smoke aloft *before* it settles into the boundary layer.
     # The absolute value matters, but the rate of change catches the incoming front.
+    #
+    # V11 additions:
+    #   aod_roll_24h_mean — 24h rolling mean smooths satellite pass gaps (MODIS
+    #     only passes overhead ~4x/day, so hourly AOD has many NaN gaps).
+    #   fwd_aod — AOD at T+horizon_h is the most direct smoke-transport signal
+    #     for longer horizons: if a smoke plume is approaching Folsom, AOD will
+    #     rise upwind before PM2.5 rises at the surface. This is the leading
+    #     indicator that the current fire_advection_score approximates but cannot
+    #     directly measure.
     if 'aerosol_optical_depth' in df.columns:
         aod = pd.to_numeric(df['aerosol_optical_depth'], errors='coerce')
-        X['aod_current'] = aod
-        X['aod_diff_3h'] = aod.diff(3)
-        X['aod_diff_6h'] = aod.diff(6)
+        X['aod_current']      = aod
+        X['aod_diff_3h']      = aod.diff(3)
+        X['aod_diff_6h']      = aod.diff(6)
+        X['aod_roll_24h_mean'] = aod.rolling(24, min_periods=1).mean()
+        # Forward AOD: what is the satellite-measured aerosol load at the target hour?
+        # During training: .shift(-horizon_h) gives actual future AOD (best proxy).
+        # During inference: the AQ API forecast extends 5 days, so fwd_aod is
+        # populated with genuine forecast values — not data leakage.
+        X['fwd_aod'] = aod.shift(-horizon_h)
 
     # Wind direction: encode as sin/cos so 359° ≈ 1° (circular continuity)
     wind_dir_rad = np.radians(df['wind_direction_10m'])
