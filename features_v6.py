@@ -2,7 +2,7 @@
 features_v6.py — Feature engineering for Folsom AQI forecasting.
 CRITICAL: No data leakage. All features at row T use only data available at T.
 
-engineer_features() is decomposed into 7 private sub-functions, one per feature
+engineer_features() is decomposed into private sub-functions, one per feature
 family. The orchestrator calls each in sequence and calls X = X.copy() after
 each to prevent Pandas memory fragmentation from in-place column additions.
 """
@@ -481,70 +481,11 @@ def _add_wildfire_features(
     X['pressure_diff_12h'] = df['surface_pressure'].diff(12)
     X['pressure_diff_24h'] = df['surface_pressure'].diff(24)
     X['temp_diff_24h']     = df['temperature_2m'].diff(24)
-    # Extended differencing for multi-day frontal systems (V4.0)
     X['pressure_diff_48h'] = df['surface_pressure'].diff(48)
     X['temp_diff_48h']     = df['temperature_2m'].diff(48)
-
-    # Group 8: TRUE WILDFIRE TRACKING (V6.0 NASA FIRMS Integration)
-    if 'fire_frp_raw' in df.columns:
-        frp   = pd.to_numeric(df['fire_frp_raw'],      errors='coerce').fillna(0)
-        dist  = pd.to_numeric(df['fire_min_dist_raw'], errors='coerce').fillna(999.0)
-        count = pd.to_numeric(df['fire_count_raw'],    errors='coerce').fillna(0)
-
-        # fire_frp_current, fire_min_dist_current, fire_count_current removed (V15: zero importance)
-        # Instantaneous FIRMS values are too noisy; 24h rolling aggregates are used instead.
-
-        # Roll 24 hours: NASA satellites only pass overhead ~4 times per day.
-        # The fire is still burning between passes.
-        X['fire_frp_24h_sum']    = frp.rolling(24, min_periods=1).sum()
-        X['fire_min_dist_24h']   = dist.rolling(24, min_periods=1).min()
-        X['fire_count_24h_sum']  = count.rolling(24, min_periods=1).sum()
-
-        # Physics Engine: Inverse Square Law
-        # Thermal energy spreading over an area decays by the square of distance.
-        X['fire_intensity_proximity_index'] = (
-            X['fire_frp_24h_sum'] / ((X['fire_min_dist_24h'] + 1.0) ** 2)
-        )
-
-        # V8: Vectorized Fire Advection (Directional Smoke Transport)
-        # A fire only delivers smoke to Folsom if the wind blows FROM the fire
-        # TOWARD Folsom. We compute the dot product of wind vector and
-        # fire-to-Folsom vector, clamping negative (downwind) to zero.
-        if 'fire_bearing_nearest' in df.columns:
-            fire_bearing = pd.to_numeric(df['fire_bearing_nearest'], errors='coerce')
-            fire_to_folsom_deg = (fire_bearing + 180.0) % 360.0
-
-            wind_dir_adv = pd.to_numeric(df['wind_direction_10m'], errors='coerce')
-            angle_diff_rad = np.radians(wind_dir_adv - fire_to_folsom_deg)
-            alignment = np.cos(angle_diff_rad).clip(lower=0)
-            # fire_advection_score kept as intermediate for 24h_max computation
-            _fire_adv = X['fire_intensity_proximity_index'] * alignment
-
-            fwd_wind_dir_adv = wind_dir_adv.shift(-horizon_h)
-            fwd_angle_diff_rad = np.radians(fwd_wind_dir_adv - fire_to_folsom_deg)
-            fwd_alignment = np.cos(fwd_angle_diff_rad).clip(lower=0)
-            _fwd_fire_adv = X['fire_intensity_proximity_index'] * fwd_alignment
-        else:
-            _fire_adv     = X['fire_intensity_proximity_index']
-            _fwd_fire_adv = X['fire_intensity_proximity_index']
-
-        # 24h rolling max — the meaningful signal (instantaneous score removed V15)
-        X['fire_advection_24h_max']     = _fire_adv.rolling(24, min_periods=1).max()
-        X['fwd_fire_advection_24h_max'] = _fwd_fire_adv.rolling(24, min_periods=1).max().shift(-horizon_h)
-
-        # V15: Fire persistence features
-        # Physics: A single FIRMS detection is noisy (cloud cover, satellite angle).
-        # Multi-day fire persistence is a much stronger signal for sustained smoke.
-        # fire_frp_7d_max: peak FRP in last 7 days — captures major fire events
-        #   even when the satellite misses a pass.
-        # fire_active_days_30d: count of days with any fire detection in last 30 days —
-        #   distinguishes a brief flare from a sustained wildfire season.
-        X['fire_frp_7d_max']      = frp.rolling(7 * 24, min_periods=1).max()
-        # fire_active_days_30d: rolling 30-day count of hours with any fire detection,
-        # divided by 24 to convert to approximate day count. Avoids resample() on
-        # tz-aware index which can produce alignment issues.
-        fire_hour_flag            = (frp > 0).astype(float)
-        X['fire_active_days_30d'] = fire_hour_flag.rolling(30 * 24, min_periods=1).sum() / 24.0
+    # V16: FIRMS fire-detection features permanently removed.
+    # Ablation study proved they degrade model performance.
+    # wildfire_hdwi, precip_30d_sum, hours/days_since_rain retained (pure meteorology).
 
 
 def _add_temporal_features(
@@ -667,31 +608,26 @@ def _add_regulatory_features(
 def engineer_features(
     df: pd.DataFrame,
     horizon_h: int,
-    firms_hourly: pd.DataFrame | None = None,
 ) -> tuple[pd.DataFrame, pd.Series]:
     """
     Build feature matrix X and target y for a given forecast horizon.
+
+    V16: FIRMS satellite fire-detection features permanently removed.
+    Ablation study proved they degrade model performance. Wind-derived
+    Lagrangian trajectory origin coordinates (traj_origin_lat/lon) are
+    retained — they encode integrated wind transport direction and improve
+    24h/48h R² without any satellite data dependency.
 
     CRITICAL: No data leakage. The target at row T is us_aqi at T+horizon_h.
     All features at row T must be available at time T with no knowledge of T+1 or later.
 
     Args:
-        df:           Merged DataFrame with DatetimeIndex (America/Los_Angeles).
-                      Required columns: us_aqi, pm2_5, boundary_layer_height,
-                      wind_speed_10m, surface_pressure, relative_humidity_2m,
-                      temperature_2m, precipitation, cloud_cover, wind_direction_10m
-        horizon_h:    Forecast horizon in hours (6, 12, 24, or 48).
-        firms_hourly: Optional hourly FIRMS DataFrame (indexed by timestamp) for
-                      V12 Lagrangian trajectory features. If None or empty, trajectory
-                      features degrade gracefully to zero/999 (no crash).
+        df:        Merged DataFrame with DatetimeIndex (America/Los_Angeles).
+        horizon_h: Forecast horizon in hours (6, 12, 24, or 48).
 
     Returns:
         X: Feature DataFrame with DatetimeIndex
         y: Target Series (us_aqi at T+horizon_h, aligned with X's index)
-
-    After calling this function, caller must drop NaN targets:
-        mask = y.notna()
-        X, y = X[mask], y[mask]
     """
     X = pd.DataFrame(index=df.index)
 
@@ -700,7 +636,7 @@ def engineer_features(
     df = df.apply(pd.to_numeric, errors='coerce')
 
     _add_aqi_lag_features(X, df)
-    X = X.copy()  # defragment after column additions
+    X = X.copy()
 
     _add_pm25_and_combustion_features(X, df)
     X = X.copy()
@@ -720,24 +656,14 @@ def engineer_features(
     _add_regulatory_features(X, df, horizon_h)
     X = X.copy()
 
-    # V14: Trajectory features are horizon-aware — strictly gated to horizon_h >= 24.
-    # Belt-and-suspenders: even if add_trajectory_features is called, we drop
-    # any traj_* column that slipped in for short horizons (e.g. traj_origin_lat/lon
-    # acting as wind-history proxies at 12h).
+    # V16: Trajectory features — wind-derived only, gated to horizon_h >= 24.
+    # traj_origin_lat/lon encode integrated wind transport direction.
+    # No FIRMS data required.
     if horizon_h >= 24:
-        _firms = firms_hourly if firms_hourly is not None else pd.DataFrame()
-        add_trajectory_features(X, df, _firms)
+        add_trajectory_features(X, df)
         X = X.copy()
 
-    # Hard drop: guarantee zero traj_* columns for horizon_h < 24
-    if horizon_h < 24:
-        traj_cols = [c for c in X.columns if c.startswith("traj_") or c == "smoke_wind_alignment"]
-        if traj_cols:
-            X.drop(columns=traj_cols, inplace=True)
-
     # Target construction
-    # Residual Prediction: Target = (Future AQI) - (Current AQI)
-    # The model learns to predict the delta, not the absolute value.
     y = df['us_aqi'].shift(-horizon_h) - df['us_aqi']
     y.name = 'target_residual'
 
@@ -747,14 +673,8 @@ def engineer_features(
 def get_feature_names(horizon_h: int = 6) -> list[str]:
     """
     Return ordered list of feature names for a given horizon.
-    Used to verify alignment between training and inference.
-
-    V13: trajectory features are only included for horizon_h >= 24.
-    Pass the correct horizon to get the exact feature set for that model.
+    V16: No FIRMS data. Trajectory origin features only at horizon_h >= 24.
     """
-    # Build a tiny dummy df and extract column names.
-    # Uses 500 rows to ensure all rolling windows and forward shifts
-    # can produce non-NaN values for feature name extraction.
     idx = pd.date_range('2023-01-01', periods=500, freq='h',
                         tz='America/Los_Angeles')
     dummy = pd.DataFrame({
@@ -779,21 +699,9 @@ def get_feature_names(horizon_h: int = 6) -> list[str]:
         'carbon_monoxide':           np.random.rand(500) * 1000,
         'nitrogen_dioxide':          np.random.rand(500) * 100,
         'dust':                      np.random.rand(500) * 50,
-        'fire_frp_raw':              np.random.rand(500) * 1000,
-        'fire_min_dist_raw':         np.random.rand(500) * 100,
-        'fire_count_raw':            np.random.rand(500) * 10,
-        'fire_bearing_nearest':      np.random.rand(500) * 360,
+        'ozone':                     np.random.rand(500) * 100,
     }, index=idx)
-    # Only pass firms_dummy for horizons that use trajectory features (>= 24h)
-    firms_dummy = None
-    if horizon_h >= 24:
-        firms_dummy = pd.DataFrame({
-            'fire_frp_raw':          np.random.rand(500) * 1000,
-            'fire_count_raw':        np.random.rand(500) * 10,
-            'fire_min_dist_raw':     np.random.rand(500) * 100,
-            'fire_bearing_nearest':  np.random.rand(500) * 360,
-        }, index=idx)
-    X, _ = engineer_features(dummy, horizon_h, firms_hourly=firms_dummy)
+    X, _ = engineer_features(dummy, horizon_h)
     return list(X.columns)
 
 

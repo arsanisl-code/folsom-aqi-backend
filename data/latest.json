@@ -1,268 +1,135 @@
 {
-  "generated_at": "2026-04-19T19:19:02.312316-07:00",
+  "generated_at": "2026-04-20T14:40:08.163078-07:00",
   "location": {
     "name": "Folsom, CA",
     "lat": 38.678,
     "lon": -121.1761
   },
   "current": {
-    "aqi": 64,
-    "category": "Moderate",
-    "color": "#ffff00",
+    "aqi": 47,
+    "category": "Good",
+    "color": "#00e400",
     "primary_pollutant": "O3",
     "source": "AirNow",
-    "timestamp": "2026-04-19T18:00:00"
+    "timestamp": "2026-04-20T13:00:00"
   },
   "forecasts": {
     "6h": {
-      "aqi": 28,
-      "ci_lo": 19,
-      "ci_hi": 76,
+      "aqi": 46,
+      "ci_lo": 35,
+      "ci_hi": 56,
       "category": "Good",
       "color": "#00e400",
-      "valid_at": "2026-04-20T01:19:02.312316-07:00"
+      "valid_at": "2026-04-20T20:40:08.163078-07:00"
     },
     "12h": {
-      "aqi": 33,
-      "ci_lo": 17,
-      "ci_hi": 74,
+      "aqi": 37,
+      "ci_lo": 28,
+      "ci_hi": 57,
       "category": "Good",
       "color": "#00e400",
-      "valid_at": "2026-04-20T07:19:02.312316-07:00"
+      "valid_at": "2026-04-21T02:40:08.163078-07:00"
     },
     "24h": {
-      "aqi": 50,
-      "ci_lo": 33,
-      "ci_hi": 90,
+      "aqi": 41,
+      "ci_lo": 26,
+      "ci_hi": 64,
       "category": "Good",
       "color": "#00e400",
-      "valid_at": "2026-04-20T19:19:02.312316-07:00"
+      "valid_at": "2026-04-21T14:40:08.163078-07:00"
     },
     "48h": {
-      "aqi": 46,
-      "ci_lo": 28,
-      "ci_hi": 94,
+      "aqi": 37,
+      "ci_lo": 23,
+      "ci_hi": 70,
       "category": "Good",
       "color": "#00e400",
-      "valid_at": "2026-04-21T19:19:02.312316-07:00"
+      "valid_at": "2026-04-22T14:40:08.163078-07:00"
     }
   },
   "history_72h": [
     {
-      "timestamp": "2026-04-16T20:00:00-07:00",
-      "actual_aqi": 46,
-      "forecast_aqi": 34,
-      "ci_lo": 28,
-      "ci_hi": 50
-    },
-    {
-      "timestamp": "2026-04-16T21:00:00-07:00",
-      "actual_aqi": 46,
-      "forecast_aqi": 37,
-      "ci_lo": 28,
-      "ci_hi": 50
-    },
-    {
-      "timestamp": "2026-04-16T22:00:00-07:00",
-      "actual_aqi": 46,
-      "forecast_aqi": 44,
-      "ci_lo": 30,
-      "ci_hi": 50
-    },
-    {
-      "timestamp": "2026-04-16T23:00:00-07:00",
-      "actual_aqi": 45,
-      "forecast_aqi": 37,
-      "ci_lo": 30,
-      "ci_hi": 49
-    },
-    {
-      "timestamp": "2026-04-17T00:00:00-07:00",
-      "actual_aqi": 45,
-      "forecast_aqi": 43,
-      "ci_lo": 32,
-      "ci_hi": 49
-    },
-    {
-      "timestamp": "2026-04-17T01:00:00-07:00",
-      "actual_aqi": 44,
-      "forecast_aqi": 36,
-      "ci_lo": 30,
-      "ci_hi": 48
-    },
-    {
-      "timestamp": "2026-04-17T02:00:00-07:00",
-      "actual_aqi": 44,
-      "forecast_aqi": 41,
-      "ci_lo": 31,
-      "ci_hi": 49
-    },
-    {
-      "timestamp": "2026-04-17T03:00:00-07:00",
-      "actual_aqi": 44,
-      "forecast_aqi": 40,
-      "ci_lo": 31,
-      "ci_hi": 48
-    },
-    {
-      "timestamp": "2026-04-17T04:00:00-07:00",
-      "actual_aqi": 43,
-      "forecast_aqi": 35,
-      "ci_lo": 29,
-      "ci_hi": 48
-    },
-    {
-      "timestamp": "2026-04-17T05:00:00-07:00",
-      "actual_aqi": 43,
-      "forecast_aqi": 38,
-      "ci_lo": 30,
-      "ci_hi": 48
-    },
-    {
-      "timestamp": "2026-04-17T06:00:00-07:00",
-      "actual_aqi": 43,
-      "forecast_aqi": 38,
-      "ci_lo": 29,
-      "ci_hi": 48
-    },
-    {
-      "timestamp": "2026-04-17T07:00:00-07:00",
-      "actual_aqi": 42,
-      "forecast_aqi": 35,
-      "ci_lo": 27,
-      "ci_hi": 48
-    },
-    {
-      "timestamp": "2026-04-17T08:00:00-07:00",
-      "actual_aqi": 40,
-      "forecast_aqi": 33,
-      "ci_lo": 24,
-      "ci_hi": 46
-    },
-    {
-      "timestamp": "2026-04-17T09:00:00-07:00",
-      "actual_aqi": 38,
-      "forecast_aqi": 35,
-      "ci_lo": 26,
-      "ci_hi": 45
-    },
-    {
-      "timestamp": "2026-04-17T10:00:00-07:00",
-      "actual_aqi": 36,
-      "forecast_aqi": 40,
-      "ci_lo": 27,
-      "ci_hi": 45
-    },
-    {
-      "timestamp": "2026-04-17T11:00:00-07:00",
-      "actual_aqi": 36,
-      "forecast_aqi": 43,
-      "ci_lo": 30,
-      "ci_hi": 52
-    },
-    {
-      "timestamp": "2026-04-17T12:00:00-07:00",
-      "actual_aqi": 36,
-      "forecast_aqi": 44,
-      "ci_lo": 31,
-      "ci_hi": 57
-    },
-    {
-      "timestamp": "2026-04-17T13:00:00-07:00",
-      "actual_aqi": 36,
-      "forecast_aqi": 54,
-      "ci_lo": 32,
-      "ci_hi": 65
-    },
-    {
-      "timestamp": "2026-04-17T14:00:00-07:00",
-      "actual_aqi": 38,
-      "forecast_aqi": 60,
-      "ci_lo": 33,
-      "ci_hi": 74
-    },
-    {
       "timestamp": "2026-04-17T15:00:00-07:00",
       "actual_aqi": 41,
-      "forecast_aqi": 63,
-      "ci_lo": 34,
-      "ci_hi": 77
+      "forecast_aqi": 68,
+      "ci_lo": 31,
+      "ci_hi": 79
     },
     {
       "timestamp": "2026-04-17T16:00:00-07:00",
       "actual_aqi": 45,
-      "forecast_aqi": 56,
-      "ci_lo": 36,
-      "ci_hi": 79
+      "forecast_aqi": 58,
+      "ci_lo": 34,
+      "ci_hi": 81
     },
     {
       "timestamp": "2026-04-17T17:00:00-07:00",
       "actual_aqi": 49,
-      "forecast_aqi": 58,
-      "ci_lo": 37,
-      "ci_hi": 75
+      "forecast_aqi": 55,
+      "ci_lo": 36,
+      "ci_hi": 77
     },
     {
       "timestamp": "2026-04-17T18:00:00-07:00",
       "actual_aqi": 62,
       "forecast_aqi": 47,
-      "ci_lo": 38,
-      "ci_hi": 77
+      "ci_lo": 34,
+      "ci_hi": 75
     },
     {
       "timestamp": "2026-04-17T19:00:00-07:00",
       "actual_aqi": 72,
-      "forecast_aqi": 39,
-      "ci_lo": 35,
-      "ci_hi": 76
+      "forecast_aqi": 40,
+      "ci_lo": 36,
+      "ci_hi": 70
     },
     {
       "timestamp": "2026-04-17T20:00:00-07:00",
       "actual_aqi": 74,
-      "forecast_aqi": 36,
+      "forecast_aqi": 35,
       "ci_lo": 31,
-      "ci_hi": 78
+      "ci_hi": 70
     },
     {
       "timestamp": "2026-04-17T21:00:00-07:00",
       "actual_aqi": 69,
       "forecast_aqi": 35,
-      "ci_lo": 28,
-      "ci_hi": 73
+      "ci_lo": 29,
+      "ci_hi": 63
     },
     {
       "timestamp": "2026-04-17T22:00:00-07:00",
       "actual_aqi": 58,
-      "forecast_aqi": 34,
-      "ci_lo": 26,
-      "ci_hi": 62
+      "forecast_aqi": 35,
+      "ci_lo": 24,
+      "ci_hi": 56
     },
     {
       "timestamp": "2026-04-17T23:00:00-07:00",
       "actual_aqi": 48,
-      "forecast_aqi": 33,
-      "ci_lo": 28,
-      "ci_hi": 53
+      "forecast_aqi": 34,
+      "ci_lo": 29,
+      "ci_hi": 50
     },
     {
       "timestamp": "2026-04-18T00:00:00-07:00",
       "actual_aqi": 42,
       "forecast_aqi": 34,
-      "ci_lo": 26,
-      "ci_hi": 49
+      "ci_lo": 28,
+      "ci_hi": 50
     },
     {
       "timestamp": "2026-04-18T01:00:00-07:00",
       "actual_aqi": 35,
       "forecast_aqi": 33,
-      "ci_lo": 23,
+      "ci_lo": 24,
       "ci_hi": 43
     },
     {
       "timestamp": "2026-04-18T02:00:00-07:00",
       "actual_aqi": 29,
-      "forecast_aqi": 31,
-      "ci_lo": 19,
+      "forecast_aqi": 30,
+      "ci_lo": 21,
       "ci_hi": 38
     },
     {
@@ -275,148 +142,148 @@
     {
       "timestamp": "2026-04-18T04:00:00-07:00",
       "actual_aqi": 28,
-      "forecast_aqi": 33,
-      "ci_lo": 23,
+      "forecast_aqi": 32,
+      "ci_lo": 25,
       "ci_hi": 37
     },
     {
       "timestamp": "2026-04-18T05:00:00-07:00",
       "actual_aqi": 29,
-      "forecast_aqi": 32,
-      "ci_lo": 26,
-      "ci_hi": 37
+      "forecast_aqi": 31,
+      "ci_lo": 27,
+      "ci_hi": 38
     },
     {
       "timestamp": "2026-04-18T06:00:00-07:00",
       "actual_aqi": 30,
-      "forecast_aqi": 33,
-      "ci_lo": 27,
+      "forecast_aqi": 32,
+      "ci_lo": 25,
       "ci_hi": 40
     },
     {
       "timestamp": "2026-04-18T07:00:00-07:00",
       "actual_aqi": 30,
       "forecast_aqi": 33,
-      "ci_lo": 27,
+      "ci_lo": 25,
       "ci_hi": 40
     },
     {
       "timestamp": "2026-04-18T08:00:00-07:00",
       "actual_aqi": 30,
       "forecast_aqi": 33,
-      "ci_lo": 27,
-      "ci_hi": 40
+      "ci_lo": 26,
+      "ci_hi": 41
     },
     {
       "timestamp": "2026-04-18T09:00:00-07:00",
       "actual_aqi": 31,
       "forecast_aqi": 37,
-      "ci_lo": 29,
-      "ci_hi": 46
+      "ci_lo": 26,
+      "ci_hi": 49
     },
     {
       "timestamp": "2026-04-18T10:00:00-07:00",
       "actual_aqi": 31,
       "forecast_aqi": 45,
-      "ci_lo": 30,
-      "ci_hi": 63
+      "ci_lo": 26,
+      "ci_hi": 68
     },
     {
       "timestamp": "2026-04-18T11:00:00-07:00",
       "actual_aqi": 31,
-      "forecast_aqi": 58,
-      "ci_lo": 31,
+      "forecast_aqi": 60,
+      "ci_lo": 29,
       "ci_hi": 83
     },
     {
       "timestamp": "2026-04-18T12:00:00-07:00",
       "actual_aqi": 31,
-      "forecast_aqi": 75,
-      "ci_lo": 31,
-      "ci_hi": 95
+      "forecast_aqi": 76,
+      "ci_lo": 28,
+      "ci_hi": 94
     },
     {
       "timestamp": "2026-04-18T13:00:00-07:00",
       "actual_aqi": 31,
-      "forecast_aqi": 81,
-      "ci_lo": 31,
-      "ci_hi": 83
+      "forecast_aqi": 83,
+      "ci_lo": 28,
+      "ci_hi": 81
     },
     {
       "timestamp": "2026-04-18T14:00:00-07:00",
       "actual_aqi": 36,
-      "forecast_aqi": 83,
-      "ci_lo": 33,
-      "ci_hi": 85
+      "forecast_aqi": 87,
+      "ci_lo": 30,
+      "ci_hi": 90
     },
     {
       "timestamp": "2026-04-18T15:00:00-07:00",
       "actual_aqi": 43,
-      "forecast_aqi": 78,
+      "forecast_aqi": 80,
       "ci_lo": 36,
-      "ci_hi": 85
+      "ci_hi": 84
     },
     {
       "timestamp": "2026-04-18T16:00:00-07:00",
       "actual_aqi": 49,
       "forecast_aqi": 72,
-      "ci_lo": 39,
-      "ci_hi": 84
+      "ci_lo": 36,
+      "ci_hi": 88
     },
     {
       "timestamp": "2026-04-18T17:00:00-07:00",
       "actual_aqi": 71,
-      "forecast_aqi": 69,
-      "ci_lo": 44,
-      "ci_hi": 95
+      "forecast_aqi": 70,
+      "ci_lo": 43,
+      "ci_hi": 98
     },
     {
       "timestamp": "2026-04-18T18:00:00-07:00",
       "actual_aqi": 89,
       "forecast_aqi": 48,
-      "ci_lo": 38,
-      "ci_hi": 103
+      "ci_lo": 35,
+      "ci_hi": 100
     },
     {
       "timestamp": "2026-04-18T19:00:00-07:00",
       "actual_aqi": 98,
-      "forecast_aqi": 43,
+      "forecast_aqi": 41,
       "ci_lo": 34,
-      "ci_hi": 104
+      "ci_hi": 93
     },
     {
       "timestamp": "2026-04-18T20:00:00-07:00",
       "actual_aqi": 98,
-      "forecast_aqi": 37,
-      "ci_lo": 31,
-      "ci_hi": 100
+      "forecast_aqi": 36,
+      "ci_lo": 29,
+      "ci_hi": 90
     },
     {
       "timestamp": "2026-04-18T21:00:00-07:00",
       "actual_aqi": 90,
       "forecast_aqi": 38,
-      "ci_lo": 27,
-      "ci_hi": 92
+      "ci_lo": 24,
+      "ci_hi": 83
     },
     {
       "timestamp": "2026-04-18T22:00:00-07:00",
       "actual_aqi": 76,
-      "forecast_aqi": 35,
-      "ci_lo": 29,
-      "ci_hi": 78
+      "forecast_aqi": 37,
+      "ci_lo": 28,
+      "ci_hi": 70
     },
     {
       "timestamp": "2026-04-18T23:00:00-07:00",
       "actual_aqi": 56,
-      "forecast_aqi": 37,
-      "ci_lo": 24,
-      "ci_hi": 59
+      "forecast_aqi": 42,
+      "ci_lo": 25,
+      "ci_hi": 57
     },
     {
       "timestamp": "2026-04-19T00:00:00-07:00",
       "actual_aqi": 45,
-      "forecast_aqi": 39,
-      "ci_lo": 26,
+      "forecast_aqi": 41,
+      "ci_lo": 28,
       "ci_hi": 50
     },
     {
@@ -424,13 +291,13 @@
       "actual_aqi": 37,
       "forecast_aqi": 37,
       "ci_lo": 24,
-      "ci_hi": 43
+      "ci_hi": 45
     },
     {
       "timestamp": "2026-04-19T02:00:00-07:00",
       "actual_aqi": 34,
-      "forecast_aqi": 37,
-      "ci_lo": 24,
+      "forecast_aqi": 36,
+      "ci_lo": 26,
       "ci_hi": 42
     },
     {
@@ -443,153 +310,286 @@
     {
       "timestamp": "2026-04-19T04:00:00-07:00",
       "actual_aqi": 35,
-      "forecast_aqi": 36,
-      "ci_lo": 31,
+      "forecast_aqi": 35,
+      "ci_lo": 30,
       "ci_hi": 43
     },
     {
       "timestamp": "2026-04-19T05:00:00-07:00",
       "actual_aqi": 35,
       "forecast_aqi": 35,
-      "ci_lo": 30,
-      "ci_hi": 46
+      "ci_lo": 29,
+      "ci_hi": 44
     },
     {
       "timestamp": "2026-04-19T06:00:00-07:00",
       "actual_aqi": 35,
-      "forecast_aqi": 36,
+      "forecast_aqi": 35,
       "ci_lo": 30,
       "ci_hi": 44
     },
     {
       "timestamp": "2026-04-19T07:00:00-07:00",
       "actual_aqi": 35,
-      "forecast_aqi": 35,
-      "ci_lo": 30,
-      "ci_hi": 45
+      "forecast_aqi": 36,
+      "ci_lo": 31,
+      "ci_hi": 44
     },
     {
       "timestamp": "2026-04-19T08:00:00-07:00",
       "actual_aqi": 35,
-      "forecast_aqi": 36,
-      "ci_lo": 30,
+      "forecast_aqi": 37,
+      "ci_lo": 31,
       "ci_hi": 45
     },
     {
       "timestamp": "2026-04-19T09:00:00-07:00",
       "actual_aqi": 35,
       "forecast_aqi": 38,
-      "ci_lo": 31,
-      "ci_hi": 46
+      "ci_lo": 30,
+      "ci_hi": 47
     },
     {
       "timestamp": "2026-04-19T10:00:00-07:00",
       "actual_aqi": 35,
       "forecast_aqi": 42,
-      "ci_lo": 32,
-      "ci_hi": 54
+      "ci_lo": 29,
+      "ci_hi": 55
     },
     {
       "timestamp": "2026-04-19T11:00:00-07:00",
       "actual_aqi": 35,
-      "forecast_aqi": 50,
+      "forecast_aqi": 52,
       "ci_lo": 32,
-      "ci_hi": 68
+      "ci_hi": 74
     },
     {
       "timestamp": "2026-04-19T12:00:00-07:00",
       "actual_aqi": 36,
-      "forecast_aqi": 65,
-      "ci_lo": 34,
-      "ci_hi": 81
+      "forecast_aqi": 66,
+      "ci_lo": 29,
+      "ci_hi": 84
     },
     {
       "timestamp": "2026-04-19T13:00:00-07:00",
       "actual_aqi": 37,
-      "forecast_aqi": 78,
-      "ci_lo": 35,
-      "ci_hi": 87
+      "forecast_aqi": 81,
+      "ci_lo": 32,
+      "ci_hi": 89
     },
     {
       "timestamp": "2026-04-19T14:00:00-07:00",
       "actual_aqi": 38,
-      "forecast_aqi": 93,
-      "ci_lo": 37,
+      "forecast_aqi": 96,
+      "ci_lo": 33,
       "ci_hi": 98
     },
     {
       "timestamp": "2026-04-19T15:00:00-07:00",
       "actual_aqi": 40,
       "forecast_aqi": 92,
-      "ci_lo": 37,
-      "ci_hi": 96
+      "ci_lo": 33,
+      "ci_hi": 99
     },
     {
       "timestamp": "2026-04-19T16:00:00-07:00",
       "actual_aqi": 47,
-      "forecast_aqi": 81,
-      "ci_lo": 39,
-      "ci_hi": 89
+      "forecast_aqi": 86,
+      "ci_lo": 36,
+      "ci_hi": 93
     },
     {
       "timestamp": "2026-04-19T17:00:00-07:00",
       "actual_aqi": 66,
-      "forecast_aqi": 75,
-      "ci_lo": 48,
-      "ci_hi": 96
+      "forecast_aqi": 83,
+      "ci_lo": 45,
+      "ci_hi": 107
     },
     {
       "timestamp": "2026-04-19T18:00:00-07:00",
-      "actual_aqi": 86,
-      "forecast_aqi": 63,
+      "actual_aqi": 88,
+      "forecast_aqi": 69,
       "ci_lo": 49,
-      "ci_hi": 104
+      "ci_hi": 115
     },
     {
       "timestamp": "2026-04-19T19:00:00-07:00",
-      "actual_aqi": 100,
-      "forecast_aqi": 51,
-      "ci_lo": 42,
-      "ci_hi": 106
+      "actual_aqi": 102,
+      "forecast_aqi": 52,
+      "ci_lo": 44,
+      "ci_hi": 108
+    },
+    {
+      "timestamp": "2026-04-19T20:00:00-07:00",
+      "actual_aqi": 108,
+      "forecast_aqi": 44,
+      "ci_lo": 40,
+      "ci_hi": 102
+    },
+    {
+      "timestamp": "2026-04-19T21:00:00-07:00",
+      "actual_aqi": 105,
+      "forecast_aqi": 41,
+      "ci_lo": 34,
+      "ci_hi": 98
+    },
+    {
+      "timestamp": "2026-04-19T22:00:00-07:00",
+      "actual_aqi": 96,
+      "forecast_aqi": 36,
+      "ci_lo": 26,
+      "ci_hi": 88
+    },
+    {
+      "timestamp": "2026-04-19T23:00:00-07:00",
+      "actual_aqi": 81,
+      "forecast_aqi": 41,
+      "ci_lo": 30,
+      "ci_hi": 73
+    },
+    {
+      "timestamp": "2026-04-20T00:00:00-07:00",
+      "actual_aqi": 62,
+      "forecast_aqi": 42,
+      "ci_lo": 25,
+      "ci_hi": 56
+    },
+    {
+      "timestamp": "2026-04-20T01:00:00-07:00",
+      "actual_aqi": 48,
+      "forecast_aqi": 41,
+      "ci_lo": 29,
+      "ci_hi": 48
+    },
+    {
+      "timestamp": "2026-04-20T02:00:00-07:00",
+      "actual_aqi": 42,
+      "forecast_aqi": 37,
+      "ci_lo": 28,
+      "ci_hi": 47
+    },
+    {
+      "timestamp": "2026-04-20T03:00:00-07:00",
+      "actual_aqi": 39,
+      "forecast_aqi": 37,
+      "ci_lo": 27,
+      "ci_hi": 45
+    },
+    {
+      "timestamp": "2026-04-20T04:00:00-07:00",
+      "actual_aqi": 38,
+      "forecast_aqi": 38,
+      "ci_lo": 27,
+      "ci_hi": 45
+    },
+    {
+      "timestamp": "2026-04-20T05:00:00-07:00",
+      "actual_aqi": 38,
+      "forecast_aqi": 39,
+      "ci_lo": 29,
+      "ci_hi": 45
+    },
+    {
+      "timestamp": "2026-04-20T06:00:00-07:00",
+      "actual_aqi": 38,
+      "forecast_aqi": 40,
+      "ci_lo": 31,
+      "ci_hi": 45
+    },
+    {
+      "timestamp": "2026-04-20T07:00:00-07:00",
+      "actual_aqi": 39,
+      "forecast_aqi": 41,
+      "ci_lo": 29,
+      "ci_hi": 47
+    },
+    {
+      "timestamp": "2026-04-20T08:00:00-07:00",
+      "actual_aqi": 40,
+      "forecast_aqi": 43,
+      "ci_lo": 31,
+      "ci_hi": 50
+    },
+    {
+      "timestamp": "2026-04-20T09:00:00-07:00",
+      "actual_aqi": 41,
+      "forecast_aqi": 42,
+      "ci_lo": 33,
+      "ci_hi": 51
+    },
+    {
+      "timestamp": "2026-04-20T10:00:00-07:00",
+      "actual_aqi": 41,
+      "forecast_aqi": 44,
+      "ci_lo": 34,
+      "ci_hi": 58
+    },
+    {
+      "timestamp": "2026-04-20T11:00:00-07:00",
+      "actual_aqi": 40,
+      "forecast_aqi": 46,
+      "ci_lo": 31,
+      "ci_hi": 75
+    },
+    {
+      "timestamp": "2026-04-20T12:00:00-07:00",
+      "actual_aqi": 40,
+      "forecast_aqi": 45,
+      "ci_lo": 31,
+      "ci_hi": 64
+    },
+    {
+      "timestamp": "2026-04-20T13:00:00-07:00",
+      "actual_aqi": 39,
+      "forecast_aqi": 42,
+      "ci_lo": 29,
+      "ci_hi": 49
+    },
+    {
+      "timestamp": "2026-04-20T14:00:00-07:00",
+      "actual_aqi": 39,
+      "forecast_aqi": 40,
+      "ci_lo": 29,
+      "ci_hi": 49
     }
   ],
-  "model_version": "V14-Conformal-Calibrated",
+  "model_version": "Folsom-AQI-Lagrangian",
   "model_metadata": {
-    "architecture": "V14-Conformal-Calibrated",
+    "architecture": "Folsom-AQI-Lagrangian",
     "total_features": {
-      "6h": 168,
-      "12h": 168,
-      "24h": 189,
-      "48h": 189
+      "6h": 163,
+      "12h": 163,
+      "24h": 171,
+      "48h": 171
     },
     "horizons": [
       {
         "horizon_h": 6,
-        "val_mae": 2.23,
-        "val_r2": 0.934,
-        "val_coverage": 96.7,
-        "avg_width": 18.6
+        "val_mae": 2.2,
+        "val_r2": 0.939,
+        "val_coverage": 97.5,
+        "avg_width": 20.7
       },
       {
         "horizon_h": 12,
-        "val_mae": 4.7,
-        "val_r2": 0.723,
-        "val_coverage": 94.6,
-        "avg_width": 27.8
+        "val_mae": 4.71,
+        "val_r2": 0.701,
+        "val_coverage": 94.5,
+        "avg_width": 31.2
       },
       {
         "horizon_h": 24,
-        "val_mae": 6.99,
-        "val_r2": 0.499,
-        "val_coverage": 95.6,
-        "avg_width": 40.1
+        "val_mae": 7.08,
+        "val_r2": 0.478,
+        "val_coverage": 97.5,
+        "avg_width": 42.7
       },
       {
         "horizon_h": 48,
-        "val_mae": 9.1,
-        "val_r2": 0.146,
-        "val_coverage": 98.4,
-        "avg_width": 51.8
+        "val_mae": 9.14,
+        "val_r2": 0.139,
+        "val_coverage": 99.1,
+        "avg_width": 55.1
       }
     ],
     "feature_names": [
@@ -646,6 +646,9 @@
       "dust_diff_6h",
       "no2_current",
       "no2_roll_24h_mean",
+      "ozone_current",
+      "ozone_roll_6h_mean",
+      "ozone_diff_3h",
       "boundary_layer_height",
       "wind_speed_10m",
       "surface_pressure",
@@ -722,14 +725,6 @@
       "temp_diff_24h",
       "pressure_diff_48h",
       "temp_diff_48h",
-      "fire_frp_24h_sum",
-      "fire_min_dist_24h",
-      "fire_count_24h_sum",
-      "fire_intensity_proximity_index",
-      "fire_advection_24h_max",
-      "fwd_fire_advection_24h_max",
-      "fire_frp_7d_max",
-      "fire_active_days_30d",
       "hour_sin",
       "hour_cos",
       "dow_sin",
@@ -772,5 +767,5 @@
     ]
   },
   "data_freshness_minutes": 0,
-  "ai_summary": "Currently, the air quality in Folsom is rated as 'Moderate' with an AQI of 64, meaning that while most people can enjoy outdoor activities, those who are unusually sensitive to air pollution should consider limiting prolonged exertion. Conditions are expected to improve significantly over the next 48 hours, trending towards 'Good' levels. For today, general outdoor activity is advisable for most residents."
+  "ai_summary": "The current air quality in Folsom is good, with an AQI of 47, meaning it's satisfactory and safe for everyone to enjoy outdoor activities. Conditions are expected to remain good over the next 48 hours, with forecasts indicating a slight dip and then a rise in AQI but staying within the good range. You can confidently plan your outdoor activities today and tomorrow."
 }

@@ -75,228 +75,6 @@ WEATHER_VARS = WEATHER_VARS_CORE + WEATHER_VARS_PRESSURE_LEVEL
 
 # ─── Helpers ──────────────────────────────────────────────────────────────────
 
-def fetch_firms_recent(days: int = 2) -> pd.DataFrame:
-    """Fetch recent NASA FIRMS active fire data for the local region."""
-    api_key = os.environ.get("FIRMS_MAP_KEY")
-    if not api_key:
-        log.warning("FIRMS_MAP_KEY missing. Wildfire features will be 0.")
-        return pd.DataFrame()
-        
-    sensors = ["MODIS_NRT", "VIIRS_SNPP_NRT"]
-    bbox = "-123.0,37.0,-119.0,40.5"
-    dfs = []
-    
-    for sensor in sensors:
-        url = f"https://firms.modaps.eosdis.nasa.gov/api/area/csv/{api_key}/{sensor}/{bbox}/{days}"
-        try:
-            resp = requests.get(url, timeout=15)
-            if resp.status_code == 200 and len(resp.text.strip()) > 0:
-                df_sensor = pd.read_csv(io.StringIO(resp.text))
-                if not df_sensor.empty:
-                    dfs.append(df_sensor)
-        except Exception as e:
-            log.error("FIRMS API error for %s: %s", sensor, e, exc_info=True)
-            
-    if not dfs:
-        return pd.DataFrame()
-        
-    df = pd.concat(dfs, ignore_index=True)
-    if 'latitude' not in df.columns or 'longitude' not in df.columns or 'frp' not in df.columns:
-        return pd.DataFrame()
-    
-    # Haversine distance
-    lat1, lon1 = np.radians(df['latitude']), np.radians(df['longitude'])
-    lat2, lon2 = np.radians(LAT), np.radians(LON)
-    dlat, dlon = lat2 - lat1, lon2 - lon1
-    a = np.sin(dlat/2)**2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon/2)**2
-    df['distance_km'] = 6371 * (2 * np.arcsin(np.sqrt(a)))
-    
-    # V8: Compute bearing from Folsom TO each fire (degrees, 0=North, clockwise)
-    # Used by the feature engineer for vectorized smoke advection dot product
-    fire_lat_rad = np.radians(df['latitude'])
-    fire_lon_rad = np.radians(df['longitude'])
-    folsom_lat_rad = np.radians(LAT)
-    folsom_lon_rad = np.radians(LON)
-    d_lon = fire_lon_rad - folsom_lon_rad
-    x = np.sin(d_lon) * np.cos(fire_lat_rad)
-    y = np.cos(folsom_lat_rad) * np.sin(fire_lat_rad) - \
-        np.sin(folsom_lat_rad) * np.cos(fire_lat_rad) * np.cos(d_lon)
-    df['bearing_deg'] = np.degrees(np.arctan2(x, y)) % 360
-    
-    # Convert 'acq_date' + 'acq_time' to datetime
-    df['acq_time'] = df['acq_time'].astype(str).str.zfill(4)
-    df['datetime_utc'] = pd.to_datetime(df['acq_date'] + ' ' + df['acq_time'], format='%Y-%m-%d %H%M', errors='coerce').dt.tz_localize('UTC')
-    df = df.dropna(subset=['datetime_utc'])
-    df['datetime_local'] = df['datetime_utc'].dt.tz_convert(TZ).dt.floor('h')
-    
-    # For each hour, find the bearing of the nearest fire (the one whose smoke matters most)
-    nearest_idx = df.groupby('datetime_local')['distance_km'].idxmin()
-    nearest_bearings = df.loc[nearest_idx].set_index('datetime_local')['bearing_deg']
-    
-    # Aggregate hourly
-    hourly = df.groupby('datetime_local').agg(
-        fire_frp_raw=('frp', 'sum'),
-        fire_count_raw=('frp', 'count'),
-        fire_min_dist_raw=('distance_km', 'min')
-    )
-    hourly['fire_bearing_nearest'] = nearest_bearings
-    
-    hourly.index.name = 'time'
-    return hourly
-
-
-def fetch_firms_history(start_date: str, end_date: str) -> pd.DataFrame:
-    """
-    Fetch historical NASA FIRMS fire data for the Folsom bounding box.
-
-    Why this exists:
-      fetch_firms_recent() only covers the last 2 days and is used at inference
-      time. During training, fire_frp_raw is always zero/NaN because the full
-      history fetch never called FIRMS. This means the model trains on AQI spikes
-      caused by wildfires (e.g., 2020 Creek Fire, 2021 Caldor Fire, 2022 Mosquito
-      Fire) without any fire features to explain them — a systematic leakage of
-      causal signal.
-
-      This function fills that gap by fetching FIRMS data for the full training
-      period in 5-day chunks (the API maximum), caching each chunk as parquet.
-
-    Requires FIRMS_MAP_KEY in environment. Returns empty DataFrame if key is
-    missing — the caller fills fire columns with zeros, matching inference behavior
-    when no fires are detected.
-
-    Args:
-        start_date: 'YYYY-MM-DD' string.
-        end_date:   'YYYY-MM-DD' string.
-
-    Returns:
-        DataFrame indexed by hourly timestamp (America/Los_Angeles) with columns:
-        fire_frp_raw, fire_count_raw, fire_min_dist_raw, fire_bearing_nearest.
-        Empty DataFrame if FIRMS_MAP_KEY is absent or no fires detected.
-    """
-    api_key = os.environ.get("FIRMS_MAP_KEY", "")
-    if not api_key:
-        log.warning(
-            "FIRMS_MAP_KEY not set — skipping historical fire data fetch. "
-            "Fire features will be zero during training. "
-            "Set FIRMS_MAP_KEY in .env to enable historical fire data."
-        )
-        return pd.DataFrame()
-
-    _ensure_cache_dir()
-    tag   = f"firms_{start_date}_{end_date}"
-    cache = _cache_key(tag)
-    if cache.exists():
-        log.info("FIRMS cache hit: %s", cache)
-        return pd.read_parquet(cache)
-
-    bbox    = "-123.0,37.0,-119.0,40.5"
-    # Use Standard Processing (_SP) sensors for historical data — NRT sensors
-    # only retain data for a short rolling window (~7 days). SP archives go back
-    # to 2000 (MODIS) and 2012 (VIIRS SNPP), covering the full training period.
-    sensors = ["MODIS_SP", "VIIRS_SNPP_SP"]
-    all_frames: list[pd.DataFrame] = []
-
-    start_dt = datetime.strptime(start_date, "%Y-%m-%d")
-    end_dt   = datetime.strptime(end_date,   "%Y-%m-%d")
-    chunk_days = 5  # FIRMS API maximum
-
-    total_days = (end_dt - start_dt).days
-    total_chunks = (total_days + chunk_days - 1) // chunk_days
-    chunk_num = 0
-
-    current = start_dt
-    while current < end_dt:
-        chunk_end = min(current + timedelta(days=chunk_days - 1), end_dt)
-        date_str  = current.strftime("%Y-%m-%d")
-        days_in_chunk = (chunk_end - current).days + 1
-        chunk_num += 1
-
-        if chunk_num == 1 or chunk_num % 30 == 0 or chunk_num == total_chunks:
-            log.info("  FIRMS fetch: chunk %d/%d  (%s)", chunk_num, total_chunks, date_str)
-
-        for sensor in sensors:
-            url = (
-                f"https://firms.modaps.eosdis.nasa.gov/api/area/csv"
-                f"/{api_key}/{sensor}/{bbox}/{days_in_chunk}/{date_str}"
-            )
-            try:
-                resp = requests.get(url, timeout=30)
-                if resp.status_code == 200 and len(resp.text.strip()) > 0:
-                    df_chunk = pd.read_csv(io.StringIO(resp.text))
-                    if not df_chunk.empty and "frp" in df_chunk.columns:
-                        all_frames.append(df_chunk)
-                elif resp.status_code == 429:
-                    log.warning("FIRMS rate limited — waiting 30s")
-                    time.sleep(30)
-                else:
-                    log.debug("FIRMS %s %s: status=%s", sensor, date_str, resp.status_code)
-            except Exception as exc:
-                log.warning("FIRMS chunk %s %s failed: %s", sensor, date_str, exc)
-
-        current += timedelta(days=chunk_days)
-        time.sleep(0.5)  # courtesy delay — 5000 tx/10min limit
-
-    if not all_frames:
-        log.info("FIRMS history: no fire detections for %s → %s", start_date, end_date)
-        return pd.DataFrame()
-
-    df = pd.concat(all_frames, ignore_index=True)
-
-    # ── Haversine distance ────────────────────────────────────────────────
-    lat1 = np.radians(df["latitude"].values)
-    lon1 = np.radians(df["longitude"].values)
-    lat2, lon2 = np.radians(LAT), np.radians(LON)
-    dlat = lat2 - lat1
-    dlon = lon2 - lon1
-    a = np.sin(dlat / 2) ** 2 + np.cos(lat1) * np.cos(lat2) * np.sin(dlon / 2) ** 2
-    df["distance_km"] = 6371.0 * (2.0 * np.arcsin(np.sqrt(a)))
-
-    # ── Bearing from Folsom to each fire ──────────────────────────────────
-    fire_lat_r    = np.radians(df["latitude"].values)
-    fire_lon_r    = np.radians(df["longitude"].values)
-    folsom_lat_r  = np.radians(LAT)
-    folsom_lon_r  = np.radians(LON)
-    d_lon_b       = fire_lon_r - folsom_lon_r
-    bx = np.sin(d_lon_b) * np.cos(fire_lat_r)
-    by = (np.cos(folsom_lat_r) * np.sin(fire_lat_r)
-          - np.sin(folsom_lat_r) * np.cos(fire_lat_r) * np.cos(d_lon_b))
-    df["bearing_deg"] = np.degrees(np.arctan2(bx, by)) % 360.0
-
-    # ── Datetime conversion ───────────────────────────────────────────────
-    df["acq_time"] = df["acq_time"].astype(str).str.zfill(4)
-    df["datetime_utc"] = pd.to_datetime(
-        df["acq_date"] + " " + df["acq_time"],
-        format="%Y-%m-%d %H%M", errors="coerce"
-    ).dt.tz_localize("UTC")
-    df = df.dropna(subset=["datetime_utc"])
-    df["datetime_local"] = df["datetime_utc"].dt.floor("h").dt.tz_convert(TZ)
-
-    # ── Hourly aggregation ────────────────────────────────────────────────
-    nearest_idx      = df.groupby("datetime_local")["distance_km"].idxmin()
-    nearest_bearings = df.loc[nearest_idx].set_index("datetime_local")["bearing_deg"]
-
-    hourly = df.groupby("datetime_local").agg(
-        fire_frp_raw=("frp",         "sum"),
-        fire_count_raw=("frp",       "count"),
-        fire_min_dist_raw=("distance_km", "min"),
-    )
-    hourly["fire_bearing_nearest"] = nearest_bearings
-    hourly.index.name = "time"
-
-    # ── Seam deduplication ────────────────────────────────────────────────
-    n_dupes = hourly.index.duplicated().sum()
-    if n_dupes > 0:
-        log.warning("FIRMS history: %d duplicate timestamps — keeping last", n_dupes)
-        hourly = hourly[~hourly.index.duplicated(keep="last")]
-
-    hourly.to_parquet(cache)
-    log.info(
-        "FIRMS history: %d fire-hours cached → %s  (range: %s → %s)",
-        len(hourly), cache, start_date, end_date,
-    )
-    return hourly
-
-
 def _ensure_cache_dir():
     CACHE_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -510,8 +288,7 @@ def fetch_weather_history(start_date: str, end_date: str) -> pd.DataFrame:
 def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
     """
     Fetch the last `past_hours` of AQ + weather data for inference.
-    Uses Open-Meteo's past_days parameter for efficient recent-data fetch.
-    Returns merged DataFrame.
+    Returns merged AQ + weather DataFrame.
     """
     _ensure_cache_dir()
     past_days = max(1, (past_hours // 24) + 1)
@@ -522,49 +299,32 @@ def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
         log.info("Recent combined cache hit: %s", cache)
         return pd.read_parquet(cache)
 
-    # AQ: use past_days for history + forecast to ensure 'Today' is fully covered
     aq_params = {
         "latitude":       LAT,
         "longitude":      LON,
         "hourly":         ",".join(AQ_VARS),
         "past_days":      past_days,
-        "forecast_days":  3,           # V4.0: bumped from 2 for 48h feature coverage
+        "forecast_days":  3,
         "timezone":       TZ,
     }
-    # Weather: use past_days + extended forecast for 48h forward-shifted features
     wx_params = {
         "latitude":       LAT,
         "longitude":      LON,
         "hourly":         ",".join(WEATHER_VARS),
         "past_days":      past_days,
-        "forecast_days":  5,           # V4.0: bumped from 3 to cover 48h+ horizon features
+        "forecast_days":  5,
         "timezone":       TZ,
     }
     try:
         aq_data  = _fetch_with_retry(AQ_ENDPOINT, aq_params)
         aq_df    = _hourly_to_df(aq_data, AQ_VARS)
-        time.sleep(2)  # Courtesy delay to avoid 429 rate-limiting on shared Render IPs
+        time.sleep(2)
         wx_data  = _fetch_with_retry(WEATHER_ENDPOINT, wx_params)
         wx_df    = _hourly_to_df(wx_data, WEATHER_VARS)
-
         merged   = _merge_aq_weather(aq_df, wx_df)
-        
-        # Inject FIRMS satellite fire data (V6.0)
-        firms_df = fetch_firms_recent()
-        if not firms_df.empty:
-            merged = merged.join(firms_df, how='left')
-            merged['fire_frp_raw'] = merged['fire_frp_raw'].fillna(0.0)
-            merged['fire_count_raw'] = merged['fire_count_raw'].fillna(0.0)
-            merged['fire_min_dist_raw'] = merged['fire_min_dist_raw'].fillna(999.0)
-        else:
-            merged['fire_frp_raw'] = 0.0
-            merged['fire_count_raw'] = 0.0
-            merged['fire_min_dist_raw'] = 999.0
-
         merged.to_parquet(cache)
         log.info("Recent combined: %s rows", len(merged))
         return merged
-
     except Exception as exc:
         log.error("ERROR fetching recent data: %s", exc, exc_info=True)
         if cache.exists():
@@ -669,30 +429,7 @@ def fetch_full_history() -> pd.DataFrame:
     log.info("  ERA5/archive seam check passed (0 duplicates around 2022-08-01).")
 
     merged = _merge_aq_weather(aq_all, wx_all)
-
-    # ── FIRMS historical fire data ────────────────────────────────────────
-    # Fetch fire detections for the full training period and join onto the
-    # merged DataFrame. This populates fire_frp_raw, fire_count_raw,
-    # fire_min_dist_raw, and fire_bearing_nearest — the same columns that
-    # fetch_recent_combined populates at inference time.
-    # Gracefully skips if FIRMS_MAP_KEY is not set (fire features → zero).
-    firms_df = fetch_firms_history(start, end)
-    if not firms_df.empty:
-        merged = merged.join(firms_df, how="left")
-        merged["fire_frp_raw"]       = merged["fire_frp_raw"].fillna(0.0)
-        merged["fire_count_raw"]     = merged["fire_count_raw"].fillna(0.0)
-        merged["fire_min_dist_raw"]  = merged["fire_min_dist_raw"].fillna(999.0)
-        log.info(
-            "  FIRMS joined: %d fire-hours out of %d total rows (%.1f%%)",
-            (merged["fire_frp_raw"] > 0).sum(),
-            len(merged),
-            100.0 * (merged["fire_frp_raw"] > 0).sum() / len(merged),
-        )
-    else:
-        merged["fire_frp_raw"]      = 0.0
-        merged["fire_count_raw"]    = 0.0
-        merged["fire_min_dist_raw"] = 999.0
-        log.info("  FIRMS: no key or no data — fire features set to zero.")
+    # V16: FIRMS fire data removed — ablation study proved it degrades performance.
 
     log.info(
         "  Full history: %s rows  |  AQI non-null: %s  |  Range: %s → %s",

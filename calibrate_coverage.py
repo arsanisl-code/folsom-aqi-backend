@@ -1,19 +1,9 @@
 """
-calibrate_coverage.py — V15 Season-Aware Split Conformal Prediction Calibration.
+calibrate_coverage.py — Season-Aware Split Conformal Prediction Calibration.
 
-Problem with V14 calibration:
-    The calibration window (T-120d to T-60d) fell in winter, where raw coverage
-    was already 99%+, giving q=0. But summer (May-Sep) coverage on the 2025
-    holdout was only 89-93%. The conformal guarantee requires the calibration
-    distribution to match the test distribution — a winter-only window violates
-    this for summer predictions.
-
-Fix (V15):
-    Use a full-year calibration window (T-365d to T-60d) and compute separate
-    q scalars for:
-        summer: May-Sep (months 5-9)
-        winter: Oct-Apr (months 10-4)
-    At inference time, apply the seasonal q based on the current month.
+Uses a full-year calibration window (T-365d to T-60d) and computes separate
+q scalars for summer (May-Sep) and winter (Oct-Apr). At inference time, the
+seasonal q is applied to guarantee >= 95% empirical coverage.
 
 Math (Split Conformal Prediction):
     Nonconformity score: s_i = max(lo_i - y_i, y_i - hi_i)
@@ -23,11 +13,7 @@ Math (Split Conformal Prediction):
     Reference: Angelopoulos & Bates (2021).
 
 Artifacts:
-    models_v6/conformal_scales.json — {
-        "6":  {"summer": q_s, "winter": q_w},
-        "12": {"summer": q_s, "winter": q_w},
-        ...
-    }
+    models_v6/conformal_scales.json
 """
 
 import json
@@ -57,15 +43,6 @@ SUMMER_MONTHS = {5, 6, 7, 8, 9}   # May-Sep
 WINTER_MONTHS = {10, 11, 12, 1, 2, 3, 4}  # Oct-Apr
 
 
-def _extract_firms(df: pd.DataFrame) -> pd.DataFrame:
-    firms_cols = ["fire_frp_raw", "fire_count_raw", "fire_min_dist_raw", "fire_bearing_nearest"]
-    avail = [c for c in firms_cols if c in df.columns]
-    if not avail or "fire_frp_raw" not in df.columns:
-        return pd.DataFrame()
-    firms = df[avail].copy()
-    return firms[firms["fire_frp_raw"] > 0]
-
-
 def compute_conformal_scale(
     y_true: np.ndarray,
     y_lo: np.ndarray,
@@ -89,7 +66,7 @@ def compute_conformal_scale(
 
 def run_calibration():
     log.info("=" * 65)
-    log.info("  V15 Season-Aware Conformal Calibration")
+    log.info("  Season-Aware Conformal Calibration")
     log.info("  alpha=%.2f → %.0f%% coverage target", ALPHA, (1 - ALPHA) * 100)
     log.info("  Cal window: T-%dd to T-%dd (full year)", CAL_DAYS_START, CAL_DAYS_END)
     log.info("=" * 65)
@@ -103,7 +80,6 @@ def run_calibration():
     cal_start = now - timedelta(days=CAL_DAYS_START)
     log.info("  Cal window: %s → %s", cal_start.date(), cal_end.date())
 
-    firms_all = _extract_firms(df)
     scales_out: dict = {}
     report: list[dict] = []
 
@@ -111,7 +87,6 @@ def run_calibration():
         log.info("─" * 65)
         log.info("  Horizon: %sh", h)
 
-        # Load models
         for p in [MODELS_DIR / f"lgbm_{k}_{h}h.pkl" for k in ["point", "q05", "q95"]] + \
                  [MODELS_DIR / f"imputer_{h}h.pkl"]:
             if not p.exists():
@@ -123,8 +98,7 @@ def run_calibration():
         q95_model   = joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl")
         imputer     = joblib.load(MODELS_DIR / f"imputer_{h}h.pkl")
 
-        # Build features for full calibration window
-        X_full, y_full = engineer_features(df, h, firms_hourly=firms_all)
+        X_full, y_full = engineer_features(df, h)
         mask = (
             y_full.notna()
             & (X_full.index >= cal_start)

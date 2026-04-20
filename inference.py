@@ -26,25 +26,9 @@ from logger import get_logger
 
 log = get_logger(__name__)
 
-
-def _extract_firms(df: pd.DataFrame) -> pd.DataFrame:
-    """
-    Extract FIRMS fire columns from a merged DataFrame for trajectory features.
-    Returns a DataFrame with only fire columns (sparse — rows with fire_frp_raw > 0).
-    Returns empty DataFrame if fire columns are absent.
-    """
-    firms_cols = ['fire_frp_raw', 'fire_count_raw', 'fire_min_dist_raw', 'fire_bearing_nearest']
-    available = [c for c in firms_cols if c in df.columns]
-    if not available:
-        return pd.DataFrame()
-    firms = df[available].copy()
-    if 'fire_frp_raw' in firms.columns:
-        firms = firms[firms['fire_frp_raw'] > 0]
-    return firms
-
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-MODEL_VERSION = "V14-Conformal-Calibrated"
+MODEL_VERSION = "Folsom-AQI-Lagrangian"
 CACHE_FILE    = Path("data/latest.json")
 
 # Open-Meteo hallucination floor for relative humidity (Folsom grid cell artifact).
@@ -357,7 +341,7 @@ def _predict_single_horizon(
     now_ts = pd.Timestamp.now(tz=TZ).floor('h')
 
     try:
-        X_inf, _ = engineer_features(df_h, horizon_h=horizon_h, firms_hourly=_extract_firms(df_h))
+        X_inf, _ = engineer_features(df_h, horizon_h=horizon_h)
 
         # Select the feature row for "now"
         if now_ts in X_inf.index:
@@ -556,7 +540,7 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
     cutoff  = now_ts - pd.Timedelta(hours=72)
 
     try:
-        X_hist, _ = engineer_features(df, horizon_h=6, firms_hourly=_extract_firms(df))
+        X_hist, _ = engineer_features(df, horizon_h=6)
         m6        = models[6]
         pt6       = m6["point"]
         q05_6     = m6["q05"]

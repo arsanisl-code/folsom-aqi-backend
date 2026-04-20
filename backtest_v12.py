@@ -1,27 +1,16 @@
 """
-backtest_v12.py — 2025 Holdout Backtest for V12 (Trajectory Features).
+backtest.py — 2025 Holdout Backtest.
 
-Methodology (identical to V5 backtest for apples-to-apples comparison):
+Methodology:
   - Train on data from 2019-01-01 through 2024-12-31
   - Evaluate on 2025-01-01 through 2025-12-31 (month-by-month)
-  - Uses V12 feature engineering (trajectories.py integrated)
   - Reports MAE, R², Coverage per horizon per month + annual averages
 
 Leakage prevention:
   1. Imputer fit ONLY on training rows — never sees holdout statistics.
-  2. FIRMS data passed to engineer_features is split by timestamp:
-       - Training features: only fires with timestamp ≤ train_cutoff
-       - Holdout features:  only fires with timestamp ≤ row timestamp
-         (trajectories.py already enforces this via cap_ns = T_i)
-  3. Feature engineering runs on the full df for rolling-window warm-up,
-     but the FIRMS argument is restricted to train-period fires when
-     computing training features, and to all fires ≤ T when computing
-     holdout features (trajectories.py cap_ns handles this automatically).
-  4. fwd_* features use shift(-horizon_h) which is legitimate NWP proxy —
-     at inference time these are populated by actual forecast data.
-     The imputer is fit only on training rows so no holdout stats leak in.
-
-Comparison baseline: backtest_v6_2025_report.csv (pre-trajectory V6)
+  2. Feature engineering runs on the full df for rolling-window warm-up,
+     but training/holdout rows are split by index after construction.
+  3. fwd_* features use shift(-horizon_h) which is legitimate NWP proxy.
 
 Usage:
     python backtest_v12.py
@@ -48,35 +37,17 @@ log = get_logger(__name__)
 TRAIN_CUTOFF = datetime(2024, 12, 31, 23, 59, 59)
 HOLDOUT_YEAR = 2025
 HORIZONS     = [6, 12, 24, 48]
-OUTPUT_CSV   = Path("backtest_v12_2025_report.csv")
-OUTPUT_JSON  = Path("backtest_v12_2025_report.json")
-
-
-def _extract_firms(df: pd.DataFrame, cutoff_ts=None) -> pd.DataFrame:
-    """
-    Extract FIRMS fire rows from df.
-    If cutoff_ts is given, only return fires with timestamp <= cutoff_ts.
-    This is the primary leakage guardrail for the backtest.
-    """
-    firms_cols = ["fire_frp_raw", "fire_count_raw", "fire_min_dist_raw", "fire_bearing_nearest"]
-    avail = [c for c in firms_cols if c in df.columns]
-    if not avail or "fire_frp_raw" not in df.columns:
-        return pd.DataFrame()
-    firms = df[avail].copy()
-    firms = firms[firms["fire_frp_raw"] > 0]
-    if cutoff_ts is not None:
-        firms = firms[firms.index <= cutoff_ts]
-    return firms
+OUTPUT_CSV   = Path("backtest_2025_report.csv")
+OUTPUT_JSON  = Path("backtest_2025_report.json")
 
 
 def run_backtest():
     log.info("=" * 65)
-    log.info("  V12 2025 Holdout Backtest")
+    log.info("  2025 Holdout Backtest")
     log.info("  Train: 2019-01-01 → 2024-12-31")
     log.info("  Holdout: 2025-01-01 → 2025-12-31")
     log.info("=" * 65)
 
-    # ── Load data ─────────────────────────────────────────────────────────
     log.info("Loading historical data...")
     df = fetch_full_history()
     log.info("  Rows: %s  |  Range: %s → %s",
@@ -85,7 +56,6 @@ def run_backtest():
     tz = df.index.tz
     train_cutoff_ts = pd.Timestamp(TRAIN_CUTOFF, tz=tz)
 
-    # Verify holdout data exists
     df_hold_check = df[df.index.year == HOLDOUT_YEAR]
     if len(df_hold_check) == 0:
         log.error("No 2025 holdout data found. Check data range.")
@@ -95,46 +65,20 @@ def run_backtest():
              f"{len(df[df.index <= train_cutoff_ts]):,}",
              f"{len(df_hold_check):,}")
 
-    # FIRMS restricted to train period only — used for training feature engineering
-    # trajectories.py cap_ns = T_i already prevents future fire leakage per-row,
-    # but we also restrict the firms_hourly input to train period as a belt-and-
-    # suspenders guarantee: no 2025 fire data can influence 2024 training features.
-    firms_train_only = _extract_firms(df, cutoff_ts=train_cutoff_ts)
-    log.info("  FIRMS fire-hours (train period only): %d", len(firms_train_only))
-
-    # FIRMS for holdout: all fires up to end of 2025 — trajectories.py cap_ns
-    # ensures each row only sees fires at timestamp <= that row's timestamp.
-    firms_all = _extract_firms(df)
-    log.info("  FIRMS fire-hours (full period): %d", len(firms_all))
-
     results = []
 
     for h in HORIZONS:
         log.info("─" * 65)
         log.info("  Horizon: %sh", h)
 
-        # ── Feature engineering ───────────────────────────────────────────
-        # Run on full df so rolling windows at Jan 2025 boundary have proper
-        # warm-up context (e.g. aqi_roll_168h_mean needs Dec 2024 data).
-        #
-        # LEAKAGE CONTROL:
-        #   - firms_train_only: training rows only see fires ≤ 2024-12-31
-        #   - firms_all passed for holdout rows: trajectories.py cap_ns = T_i
-        #     ensures each holdout row only sees fires at timestamp ≤ T_i
-        #
-        # We run engineer_features TWICE:
-        #   Pass 1 (firms_train_only): produces clean training features
-        #   Pass 2 (firms_all):        produces clean holdout features
-        # Both use the full df for rolling warm-up context.
-
-        log.info("  Building training features (firms ≤ 2024-12-31)...")
-        X_tr_full, y_tr_full = engineer_features(df, h, firms_hourly=firms_train_only)
+        log.info("  Building training features...")
+        X_tr_full, y_tr_full = engineer_features(df, h)
         mask_tr = y_tr_full.notna() & (X_tr_full.index <= train_cutoff_ts)
         X_tr = X_tr_full[mask_tr]
         y_tr = y_tr_full[mask_tr]
 
-        log.info("  Building holdout features (firms causal per-row)...")
-        X_ho_full, y_ho_full = engineer_features(df, h, firms_hourly=firms_all)
+        log.info("  Building holdout features...")
+        X_ho_full, y_ho_full = engineer_features(df, h)
         mask_ho = y_ho_full.notna() & (X_ho_full.index.year == HOLDOUT_YEAR)
         X_ho = X_ho_full[mask_ho]
         y_ho = y_ho_full[mask_ho]
@@ -240,7 +184,7 @@ def run_backtest():
         has_baseline = False
 
     log.info("  %-6s  %-8s  %-8s  %-8s  %-10s  %-10s",
-             "Horiz", "MAE_V12", "MAE_V6", "Δ MAE", "R²_V12", "Coverage")
+             "Horiz", "MAE", "MAE_prev", "Δ MAE", "R²", "Coverage")
     log.info("  " + "-" * 60)
 
     annual = []
@@ -298,7 +242,7 @@ def run_backtest():
     }
     OUTPUT_JSON.write_text(json.dumps(report, indent=2))
     log.info("  Full report → %s", OUTPUT_JSON)
-    log.info("V12 backtest complete.")
+    log.info("Backtest complete.")
 
 
 if __name__ == "__main__":

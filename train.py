@@ -81,13 +81,9 @@ _OPTUNA_PARAMS = _load_optuna_params()
 def _point_params(horizon_h: int) -> dict:
     """
     Return point model hyperparameters for the given horizon.
-    V15: objective changed from 'huber' to 'regression_l1' (pure MAE loss).
-
-    Math: Huber(delta=2.0) ≈ MAE for |e| < 2 AQI, MSE for |e| > 2 AQI.
-    Since we evaluate on MAE, training on Huber creates a systematic bias:
-    the model over-penalizes large errors at the cost of median accuracy.
-    regression_l1 aligns training loss with evaluation metric exactly.
-    Note: 'alpha' param is removed — it is only meaningful for Huber/quantile.
+    Uses regression_l1 (pure MAE loss) to align training with evaluation metric.
+    If Optuna-tuned params exist, use them; otherwise fall back to defaults.
+    Fixed params (objective, n_estimators, n_jobs) are never overridden.
     """
     # ── Check for Optuna-tuned params first ──
     tuned = _get_optuna_best(horizon_h, "point")
@@ -184,18 +180,14 @@ def train_horizon(
     df: pd.DataFrame,
     horizon_h: int,
     val_cutoff: datetime,
-    firms_hourly: pd.DataFrame | None = None,
 ) -> dict:
-    """
-    Train point + quantile models for one horizon.
-    Returns dict with val MAE, coverage, and interval width.
-    """
+    """Train point + quantile models for one horizon."""
     log.info("=" * 60)
     log.info("  Horizon: %sh", horizon_h)
     log.info("=" * 60)
 
-    # 1. Build features (V12: pass firms_hourly for trajectory features)
-    X, y = engineer_features(df, horizon_h, firms_hourly=firms_hourly)
+    # 1. Build features (V16: no FIRMS data)
+    X, y = engineer_features(df, horizon_h)
     mask = y.notna()
     X, y = X[mask], y[mask]
 
@@ -366,27 +358,14 @@ def main():
     val_cutoff = datetime.now(tz=df.index.tz) - timedelta(days=60)
     log.info("  Train/Val cutoff: %s", val_cutoff.strftime('%Y-%m-%d'))
 
-    # V12: Extract firms_hourly from the merged df for trajectory features
-    # These columns were joined in by fetch_full_history() from FIRMS cache.
-    firms_cols = ['fire_frp_raw', 'fire_count_raw', 'fire_min_dist_raw', 'fire_bearing_nearest']
-    available_firms_cols = [c for c in firms_cols if c in df.columns]
-    if available_firms_cols:
-        firms_hourly = df[available_firms_cols].copy()
-        # Keep only rows where fire data is non-zero (sparse — most hours have no fires)
-        firms_hourly = firms_hourly[firms_hourly['fire_frp_raw'] > 0] if 'fire_frp_raw' in firms_hourly.columns else firms_hourly
-        log.info("  V12 trajectory: %d fire-hours available for trajectory features", len(firms_hourly))
-    else:
-        firms_hourly = None
-        log.info("  V12 trajectory: no FIRMS data — trajectory features will be zero")
-
     # Step 2: Train models for each horizon
     log.info("Step 2: Training models for each horizon...")
     results = []
-    point_models = {}   # h → model, for importance reports
-    feature_cols = {}   # h → list of feature names
+    point_models = {}
+    feature_cols = {}
 
     for h in HORIZONS:
-        metrics, point_model, feat_cols = train_horizon(df, h, val_cutoff, firms_hourly=firms_hourly)
+        metrics, point_model, feat_cols = train_horizon(df, h, val_cutoff)
         results.append(metrics)
         point_models[h] = point_model
         feature_cols[h] = feat_cols
@@ -416,7 +395,7 @@ def main():
     # V13 verification: confirm feature pruning
     n_12h = len(get_feature_names(12))
     n_48h = len(get_feature_names(48))
-    log.info("  V13 Feature Pruning: 12h=%d features, 48h=%d features (Δ=%d trajectory cols)",
+    log.info("  Feature Pruning: 12h=%d features, 48h=%d features (Δ=%d trajectory cols)",
              n_12h, n_48h, n_48h - n_12h)
 
     # Step 5: Feature importance report per horizon (V13)
@@ -430,7 +409,7 @@ def main():
         traj_feats = {f for f in cols if f.startswith("traj_") or f == "smoke_wind_alignment"}
 
         log.info("=" * 60)
-        log.info("  V13 FEATURE IMPORTANCE — %sh Horizon (Top 20)", h)
+        log.info("  FEATURE IMPORTANCE — %sh Horizon (Top 20)", h)
         log.info("=" * 60)
         for rank, (feat, imp) in enumerate(fi[:20], 1):
             marker = " ◄ TRAJ" if feat in traj_feats else ""
@@ -440,11 +419,11 @@ def main():
         if h < 24:
             traj_in_model = [f for f in cols if f.startswith("traj_") or f == "smoke_wind_alignment"]
             if traj_in_model:
-                log.error("  V13 VIOLATION: traj features found in %sh model: %s", h, traj_in_model)
+                log.error("  VIOLATION: traj features found in %sh model: %s", h, traj_in_model)
             else:
-                log.info("  V13 OK: no trajectory features in %sh model ✓", h)
+                log.info("  OK: no trajectory features in %sh model", h)
 
-        fi_path = MODELS_DIR / f"feature_importance_{h}h_v13.json"
+        fi_path = MODELS_DIR / f"feature_importance_{h}h.json"
         fi_path.write_text(json.dumps(
             [{"feature": f, "importance": float(i), "is_trajectory": f in traj_feats}
              for f, i in fi],
@@ -473,7 +452,7 @@ def main():
         params = {k: v for k, v in model.get_params().items()
                   if k not in ('objective', 'n_estimators', 'n_jobs', 'verbosity', 'random_state')}
         warmstart_data[f"{h}h"] = {
-            "point": {"best_params": params, "source": "train.py_v15"}
+            "point": {"best_params": params, "source": "train.py"}
         }
     ws_path = MODELS_DIR / "best_optuna_params.json"
     with open(ws_path, "w") as f:
