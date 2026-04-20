@@ -44,7 +44,7 @@ def _extract_firms(df: pd.DataFrame) -> pd.DataFrame:
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-MODEL_VERSION = "V13-Horizon-Aware-Trajectory"
+MODEL_VERSION = "V14-Conformal-Calibrated"
 CACHE_FILE    = Path("data/latest.json")
 
 # Open-Meteo hallucination floor for relative humidity (Folsom grid cell artifact).
@@ -76,6 +76,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # ── V13 Model Metadata (loaded once at import) ────────────────────────────────
 _V6_METRICS: dict = {}
 _V6_FEATURES: dict = {}   # keyed by horizon_h
+_CONFORMAL_SCALES: dict[int, float] = {}   # keyed by horizon_h; 0.0 = no correction
 try:
     _m = Path("models_v6/training_metrics_v6.json")
     if _m.exists():
@@ -91,6 +92,11 @@ try:
         if _f.exists():
             names = json.loads(_f.read_text())
             _V6_FEATURES = {h: names for h in [6, 12, 24, 48]}
+    # V14: conformal calibration scales
+    _cs = Path("models_v6/conformal_scales.json")
+    if _cs.exists():
+        _raw = json.loads(_cs.read_text())
+        _CONFORMAL_SCALES = {int(k): float(v) for k, v in _raw.get("scales", {}).items()}
 except Exception:
     pass  # Graceful degradation if files aren't available yet
 
@@ -395,6 +401,14 @@ def _predict_single_horizon(
         # Fix quantile crossing
         pred_q05_sorted = min(pred_q05, pred_q95)
         pred_q95_sorted = max(pred_q05, pred_q95)
+
+        # V14: Apply conformal calibration scalar to guarantee >= 95% coverage.
+        # q is the (1-alpha)(1+1/n) quantile of nonconformity scores from the
+        # calibration set. Expanding by q gives finite-sample coverage guarantee.
+        q_conformal = _CONFORMAL_SCALES.get(horizon_h, 0.0)
+        if q_conformal > 0.0:
+            pred_q05_sorted -= q_conformal
+            pred_q95_sorted += q_conformal
 
         # Enforce monotonically increasing uncertainty across horizons.
         # min_ci_width_aqi is the floor: intervals must never shrink as the

@@ -694,13 +694,20 @@ def engineer_features(
     _add_regulatory_features(X, df, horizon_h)
     X = X.copy()
 
-    # V13: Trajectory features are horizon-aware.
-    # At 6h/12h they add noise (wind history is too short for meaningful
-    # back-trajectory signal). Only include for horizon_h >= 24.
+    # V14: Trajectory features are horizon-aware — strictly gated to horizon_h >= 24.
+    # Belt-and-suspenders: even if add_trajectory_features is called, we drop
+    # any traj_* column that slipped in for short horizons (e.g. traj_origin_lat/lon
+    # acting as wind-history proxies at 12h).
     if horizon_h >= 24:
         _firms = firms_hourly if firms_hourly is not None else pd.DataFrame()
         add_trajectory_features(X, df, _firms)
         X = X.copy()
+
+    # Hard drop: guarantee zero traj_* columns for horizon_h < 24
+    if horizon_h < 24:
+        traj_cols = [c for c in X.columns if c.startswith("traj_") or c == "smoke_wind_alignment"]
+        if traj_cols:
+            X.drop(columns=traj_cols, inplace=True)
 
     # Target construction
     # Residual Prediction: Target = (Future AQI) - (Current AQI)
