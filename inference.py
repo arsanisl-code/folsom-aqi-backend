@@ -26,9 +26,25 @@ from logger import get_logger
 
 log = get_logger(__name__)
 
+
+def _extract_firms(df: pd.DataFrame) -> pd.DataFrame:
+    """
+    Extract FIRMS fire columns from a merged DataFrame for trajectory features.
+    Returns a DataFrame with only fire columns (sparse — rows with fire_frp_raw > 0).
+    Returns empty DataFrame if fire columns are absent.
+    """
+    firms_cols = ['fire_frp_raw', 'fire_count_raw', 'fire_min_dist_raw', 'fire_bearing_nearest']
+    available = [c for c in firms_cols if c in df.columns]
+    if not available:
+        return pd.DataFrame()
+    firms = df[available].copy()
+    if 'fire_frp_raw' in firms.columns:
+        firms = firms[firms['fire_frp_raw'] > 0]
+    return firms
+
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-MODEL_VERSION = "V6.1-Physics-Informed"
+MODEL_VERSION = "V13-Horizon-Aware-Trajectory"
 CACHE_FILE    = Path("data/latest.json")
 
 # Open-Meteo hallucination floor for relative humidity (Folsom grid cell artifact).
@@ -57,16 +73,24 @@ AQI_CATEGORIES = [
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── V6 Model Metadata (loaded once at import) ─────────────────────────────────
+# ── V13 Model Metadata (loaded once at import) ────────────────────────────────
 _V6_METRICS: dict = {}
-_V6_FEATURES: list = []
+_V6_FEATURES: dict = {}   # keyed by horizon_h
 try:
     _m = Path("models_v6/training_metrics_v6.json")
     if _m.exists():
         _V6_METRICS = json.loads(_m.read_text())
-    _f = Path("models_v6/feature_names_v6.json")
-    if _f.exists():
-        _V6_FEATURES = json.loads(_f.read_text())
+    # V13: per-horizon feature names (trajectory features only in 24h/48h)
+    for _h in [6, 12, 24, 48]:
+        _f = Path(f"models_v6/feature_names_{_h}h.json")
+        if _f.exists():
+            _V6_FEATURES[_h] = json.loads(_f.read_text())
+    # Fallback to legacy single file if per-horizon files missing
+    if not _V6_FEATURES:
+        _f = Path("models_v6/feature_names_v6.json")
+        if _f.exists():
+            names = json.loads(_f.read_text())
+            _V6_FEATURES = {h: names for h in [6, 12, 24, 48]}
 except Exception:
     pass  # Graceful degradation if files aren't available yet
 
@@ -112,11 +136,19 @@ def _extract_scalar_handling_dst_duplicates(
 
 def _get_model_metadata() -> dict:
     """Return a clean subset of model metadata for the frontend."""
+    # Use 6h feature names for display (shortest, no trajectory cols)
+    features_6h = _V6_FEATURES.get(6, [])
+    features_48h = _V6_FEATURES.get(48, [])
     return {
-        "architecture":   _V6_METRICS.get("architecture", "LightGBM V6"),
-        "total_features": _V6_METRICS.get("total_features", len(_V6_FEATURES)),
+        "architecture":   MODEL_VERSION,
+        "total_features": {
+            "6h":  len(features_6h),
+            "12h": len(_V6_FEATURES.get(12, features_6h)),
+            "24h": len(_V6_FEATURES.get(24, features_48h)),
+            "48h": len(features_48h),
+        },
         "horizons":       _V6_METRICS.get("horizons", []),
-        "feature_names":  _V6_FEATURES,
+        "feature_names":  features_6h,
         "primary_drivers": [
             "aqi_current",
             "aqi_roll_24h_mean",
@@ -319,7 +351,7 @@ def _predict_single_horizon(
     now_ts = pd.Timestamp.now(tz=TZ).floor('h')
 
     try:
-        X_inf, _ = engineer_features(df_h, horizon_h=horizon_h)
+        X_inf, _ = engineer_features(df_h, horizon_h=horizon_h, firms_hourly=_extract_firms(df_h))
 
         # Select the feature row for "now"
         if now_ts in X_inf.index:
@@ -505,7 +537,7 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
     cutoff  = now_ts - pd.Timedelta(hours=72)
 
     try:
-        X_hist, _ = engineer_features(df, horizon_h=6)
+        X_hist, _ = engineer_features(df, horizon_h=6, firms_hourly=_extract_firms(df))
         m6        = models[6]
         pt6       = m6["point"]
         q05_6     = m6["q05"]

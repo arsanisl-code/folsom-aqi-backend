@@ -179,7 +179,12 @@ def _quantile_params(alpha: float, horizon_h: int) -> dict:
 
 # ─── Training ─────────────────────────────────────────────────────────────────
 
-def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dict:
+def train_horizon(
+    df: pd.DataFrame,
+    horizon_h: int,
+    val_cutoff: datetime,
+    firms_hourly: pd.DataFrame | None = None,
+) -> dict:
     """
     Train point + quantile models for one horizon.
     Returns dict with val MAE, coverage, and interval width.
@@ -188,8 +193,8 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
     log.info("  Horizon: %sh", horizon_h)
     log.info("=" * 60)
 
-    # 1. Build features
-    X, y = engineer_features(df, horizon_h)
+    # 1. Build features (V12: pass firms_hourly for trajectory features)
+    X, y = engineer_features(df, horizon_h, firms_hourly=firms_hourly)
     mask = y.notna()
     X, y = X[mask], y[mask]
 
@@ -300,16 +305,24 @@ def train_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetime) -> dic
         log.info("  Val Coverage:  %.1f%%  (target ≥ 90%%)", covered * 100)
         log.info("  Avg CI Width:  %.1f AQI", avg_width)
 
-        return {
-            "horizon_h":    horizon_h,
-            "val_mae":      round(mae, 2),
-            "val_r2":       round(r2, 3),
-            "val_coverage": round(covered * 100, 1),
-            "avg_width":    round(avg_width, 1),
-        }
+        return (
+            {
+                "horizon_h":    horizon_h,
+                "val_mae":      round(mae, 2),
+                "val_r2":       round(r2, 3),
+                "val_coverage": round(covered * 100, 1),
+                "avg_width":    round(avg_width, 1),
+            },
+            point_model,
+            list(X_train.columns),
+        )
     else:
         log.warning("  No validation data available.")
-        return {"horizon_h": horizon_h, "val_mae": None, "val_r2": None, "val_coverage": None, "avg_width": None}
+        return (
+            {"horizon_h": horizon_h, "val_mae": None, "val_r2": None, "val_coverage": None, "avg_width": None},
+            point_model,
+            list(X_train.columns),
+        )
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
@@ -342,12 +355,30 @@ def main():
     val_cutoff = datetime.now(tz=df.index.tz) - timedelta(days=60)
     log.info("  Train/Val cutoff: %s", val_cutoff.strftime('%Y-%m-%d'))
 
+    # V12: Extract firms_hourly from the merged df for trajectory features
+    # These columns were joined in by fetch_full_history() from FIRMS cache.
+    firms_cols = ['fire_frp_raw', 'fire_count_raw', 'fire_min_dist_raw', 'fire_bearing_nearest']
+    available_firms_cols = [c for c in firms_cols if c in df.columns]
+    if available_firms_cols:
+        firms_hourly = df[available_firms_cols].copy()
+        # Keep only rows where fire data is non-zero (sparse — most hours have no fires)
+        firms_hourly = firms_hourly[firms_hourly['fire_frp_raw'] > 0] if 'fire_frp_raw' in firms_hourly.columns else firms_hourly
+        log.info("  V12 trajectory: %d fire-hours available for trajectory features", len(firms_hourly))
+    else:
+        firms_hourly = None
+        log.info("  V12 trajectory: no FIRMS data — trajectory features will be zero")
+
     # Step 2: Train models for each horizon
     log.info("Step 2: Training models for each horizon...")
     results = []
+    point_models = {}   # h → model, for importance reports
+    feature_cols = {}   # h → list of feature names
+
     for h in HORIZONS:
-        metrics = train_horizon(df, h, val_cutoff)
+        metrics, point_model, feat_cols = train_horizon(df, h, val_cutoff, firms_hourly=firms_hourly)
         results.append(metrics)
+        point_models[h] = point_model
+        feature_cols[h] = feat_cols
 
     # Step 3: Print summary table
     log.info("=" * 60)
@@ -361,12 +392,54 @@ def main():
         wid = f"{r['avg_width']:.1f}" if r['avg_width'] is not None else "N/A"
         log.info("  %-10s %-12s %-10s %-12s %s", f"{r['horizon_h']}h", mae, r2, cov, wid)
 
-    # Step 4: Save feature names for inference alignment check
-    feature_names = get_feature_names(6)
-    fn_path = MODELS_DIR / "feature_names_v6.json"
-    with open(fn_path, "w") as f:
-        json.dump(feature_names, f, indent=2)
-    log.info("  Feature names saved → %s  (%s features)", fn_path, len(feature_names))
+    # Step 4: Save per-horizon feature names (V13: feature count differs by horizon)
+    for h in HORIZONS:
+        feature_names_h = get_feature_names(h)
+        fn_path = MODELS_DIR / f"feature_names_{h}h.json"
+        with open(fn_path, "w") as f:
+            json.dump(feature_names_h, f, indent=2)
+        traj_count = sum(1 for n in feature_names_h if n.startswith("traj_") or n == "smoke_wind_alignment")
+        log.info("  Feature names %sh → %s  (%d features, %d trajectory)",
+                 h, fn_path, len(feature_names_h), traj_count)
+
+    # V13 verification: confirm feature pruning
+    n_12h = len(get_feature_names(12))
+    n_48h = len(get_feature_names(48))
+    log.info("  V13 Feature Pruning: 12h=%d features, 48h=%d features (Δ=%d trajectory cols)",
+             n_12h, n_48h, n_48h - n_12h)
+
+    # Step 5: Feature importance report per horizon (V13)
+    for h in HORIZONS:
+        model = point_models.get(h)
+        cols  = feature_cols.get(h)
+        if model is None or cols is None:
+            continue
+        importances = model.feature_importances_
+        fi = sorted(zip(cols, importances), key=lambda x: x[1], reverse=True)
+        traj_feats = {f for f in cols if f.startswith("traj_") or f == "smoke_wind_alignment"}
+
+        log.info("=" * 60)
+        log.info("  V13 FEATURE IMPORTANCE — %sh Horizon (Top 20)", h)
+        log.info("=" * 60)
+        for rank, (feat, imp) in enumerate(fi[:20], 1):
+            marker = " ◄ TRAJ" if feat in traj_feats else ""
+            log.info("  %2d. %-45s  %8.1f%s", rank, feat, imp, marker)
+
+        # Verify no traj features in 6h/12h
+        if h < 24:
+            traj_in_model = [f for f in cols if f.startswith("traj_") or f == "smoke_wind_alignment"]
+            if traj_in_model:
+                log.error("  V13 VIOLATION: traj features found in %sh model: %s", h, traj_in_model)
+            else:
+                log.info("  V13 OK: no trajectory features in %sh model ✓", h)
+
+        fi_path = MODELS_DIR / f"feature_importance_{h}h_v13.json"
+        fi_path.write_text(json.dumps(
+            [{"feature": f, "importance": float(i), "is_trajectory": f in traj_feats}
+             for f, i in fi],
+            indent=2
+        ))
+        log.info("  Importance saved → %s", fi_path)
 
     # Save training metrics
     metrics_path = MODELS_DIR / "training_metrics_v6.json"

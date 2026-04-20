@@ -200,11 +200,19 @@ def fetch_firms_history(start_date: str, end_date: str) -> pd.DataFrame:
     end_dt   = datetime.strptime(end_date,   "%Y-%m-%d")
     chunk_days = 5  # FIRMS API maximum
 
+    total_days = (end_dt - start_dt).days
+    total_chunks = (total_days + chunk_days - 1) // chunk_days
+    chunk_num = 0
+
     current = start_dt
     while current < end_dt:
         chunk_end = min(current + timedelta(days=chunk_days - 1), end_dt)
         date_str  = current.strftime("%Y-%m-%d")
         days_in_chunk = (chunk_end - current).days + 1
+        chunk_num += 1
+
+        if chunk_num == 1 or chunk_num % 30 == 0 or chunk_num == total_chunks:
+            log.info("  FIRMS fetch: chunk %d/%d  (%s)", chunk_num, total_chunks, date_str)
 
         for sensor in sensors:
             url = (
@@ -261,7 +269,7 @@ def fetch_firms_history(start_date: str, end_date: str) -> pd.DataFrame:
         format="%Y-%m-%d %H%M", errors="coerce"
     ).dt.tz_localize("UTC")
     df = df.dropna(subset=["datetime_utc"])
-    df["datetime_local"] = df["datetime_utc"].dt.tz_convert(TZ).dt.floor("h")
+    df["datetime_local"] = df["datetime_utc"].dt.floor("h").dt.tz_convert(TZ)
 
     # ── Hourly aggregation ────────────────────────────────────────────────
     nearest_idx      = df.groupby("datetime_local")["distance_km"].idxmin()

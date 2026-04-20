@@ -10,6 +10,8 @@ each to prevent Pandas memory fragmentation from in-place column additions.
 import numpy as np
 import pandas as pd
 
+from trajectories import add_trajectory_features, TRAJ_LOOKBACKS
+
 
 # ─── Physical constants ───────────────────────────────────────────────────────
 
@@ -636,7 +638,11 @@ def _add_regulatory_features(
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
-def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, pd.Series]:
+def engineer_features(
+    df: pd.DataFrame,
+    horizon_h: int,
+    firms_hourly: pd.DataFrame | None = None,
+) -> tuple[pd.DataFrame, pd.Series]:
     """
     Build feature matrix X and target y for a given forecast horizon.
 
@@ -644,11 +650,14 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
     All features at row T must be available at time T with no knowledge of T+1 or later.
 
     Args:
-        df: Merged DataFrame with DatetimeIndex (America/Los_Angeles).
-            Required columns: us_aqi, pm2_5, boundary_layer_height, wind_speed_10m,
-            surface_pressure, relative_humidity_2m, temperature_2m, precipitation,
-            cloud_cover, wind_direction_10m
-        horizon_h: Forecast horizon in hours (6, 12, 24, or 48).
+        df:           Merged DataFrame with DatetimeIndex (America/Los_Angeles).
+                      Required columns: us_aqi, pm2_5, boundary_layer_height,
+                      wind_speed_10m, surface_pressure, relative_humidity_2m,
+                      temperature_2m, precipitation, cloud_cover, wind_direction_10m
+        horizon_h:    Forecast horizon in hours (6, 12, 24, or 48).
+        firms_hourly: Optional hourly FIRMS DataFrame (indexed by timestamp) for
+                      V12 Lagrangian trajectory features. If None or empty, trajectory
+                      features degrade gracefully to zero/999 (no crash).
 
     Returns:
         X: Feature DataFrame with DatetimeIndex
@@ -685,6 +694,14 @@ def engineer_features(df: pd.DataFrame, horizon_h: int) -> tuple[pd.DataFrame, p
     _add_regulatory_features(X, df, horizon_h)
     X = X.copy()
 
+    # V13: Trajectory features are horizon-aware.
+    # At 6h/12h they add noise (wind history is too short for meaningful
+    # back-trajectory signal). Only include for horizon_h >= 24.
+    if horizon_h >= 24:
+        _firms = firms_hourly if firms_hourly is not None else pd.DataFrame()
+        add_trajectory_features(X, df, _firms)
+        X = X.copy()
+
     # Target construction
     # Residual Prediction: Target = (Future AQI) - (Current AQI)
     # The model learns to predict the delta, not the absolute value.
@@ -698,6 +715,9 @@ def get_feature_names(horizon_h: int = 6) -> list[str]:
     """
     Return ordered list of feature names for a given horizon.
     Used to verify alignment between training and inference.
+
+    V13: trajectory features are only included for horizon_h >= 24.
+    Pass the correct horizon to get the exact feature set for that model.
     """
     # Build a tiny dummy df and extract column names.
     # Uses 500 rows to ensure all rolling windows and forward shifts
@@ -729,8 +749,18 @@ def get_feature_names(horizon_h: int = 6) -> list[str]:
         'fire_frp_raw':              np.random.rand(500) * 1000,
         'fire_min_dist_raw':         np.random.rand(500) * 100,
         'fire_count_raw':            np.random.rand(500) * 10,
+        'fire_bearing_nearest':      np.random.rand(500) * 360,
     }, index=idx)
-    X, _ = engineer_features(dummy, horizon_h)
+    # Only pass firms_dummy for horizons that use trajectory features (>= 24h)
+    firms_dummy = None
+    if horizon_h >= 24:
+        firms_dummy = pd.DataFrame({
+            'fire_frp_raw':          np.random.rand(500) * 1000,
+            'fire_count_raw':        np.random.rand(500) * 10,
+            'fire_min_dist_raw':     np.random.rand(500) * 100,
+            'fire_bearing_nearest':  np.random.rand(500) * 360,
+        }, index=idx)
+    X, _ = engineer_features(dummy, horizon_h, firms_hourly=firms_dummy)
     return list(X.columns)
 
 
