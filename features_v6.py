@@ -124,6 +124,17 @@ def _add_pm25_and_combustion_features(X: pd.DataFrame, df: pd.DataFrame) -> None
         X['no2_current']       = no2
         X['no2_roll_24h_mean'] = no2.rolling(24, min_periods=1).mean()
 
+    # Feature Group 1e: Ozone (V15 — photochemical leading indicator)
+    # Physics: O3 is produced by UV + NOx + VOCs. High ozone at T is a direct
+    # signal that photochemical reactions are active, which drives secondary
+    # PM2.5 formation 3-6h later. It is a leading indicator of afternoon AQI
+    # spikes that CO and PM2.5 alone cannot capture.
+    if 'ozone' in df.columns:
+        o3 = pd.to_numeric(df['ozone'], errors='coerce')
+        X['ozone_current']    = o3
+        X['ozone_roll_6h_mean'] = o3.rolling(6,  min_periods=1).mean()
+        X['ozone_diff_3h']    = o3.diff(3)   # rising O3 = photochem ramp-up
+
 
 def _add_meteorological_features(
     X: pd.DataFrame, df: pd.DataFrame, horizon_h: int
@@ -249,15 +260,20 @@ def _add_meteorological_features(
     #     directly measure.
     if 'aerosol_optical_depth' in df.columns:
         aod = pd.to_numeric(df['aerosol_optical_depth'], errors='coerce')
-        X['aod_current']      = aod
-        X['aod_diff_3h']      = aod.diff(3)
-        X['aod_diff_6h']      = aod.diff(6)
+        X['aod_current']       = aod
+        X['aod_diff_3h']       = aod.diff(3)
+        X['aod_diff_6h']       = aod.diff(6)
         X['aod_roll_24h_mean'] = aod.rolling(24, min_periods=1).mean()
-        # Forward AOD: what is the satellite-measured aerosol load at the target hour?
-        # During training: .shift(-horizon_h) gives actual future AOD (best proxy).
-        # During inference: the AQ API forecast extends 5 days, so fwd_aod is
-        # populated with genuine forecast values — not data leakage.
-        X['fwd_aod'] = aod.shift(-horizon_h)
+        X['fwd_aod']           = aod.shift(-horizon_h)
+
+        # V15: AOD interaction features (smoke transport signal amplification)
+        # Physics: AOD × wind_alignment = smoke column density × transport efficiency.
+        # A high AOD plume only matters if the wind is blowing it toward Folsom.
+        # aod_trend_6h: slope of AOD over last 6h — rising AOD = incoming plume.
+        # aod_persistence_24h: hours with AOD > 0.3 in last 24h — sustained smoke event.
+        X['aod_trend_6h'] = aod.diff(6)  # same as aod_diff_6h but semantically named
+        aod_high_flag = (aod > 0.3).astype(float)
+        X['aod_persistence_24h'] = aod_high_flag.rolling(24, min_periods=1).sum()
 
     # Wind direction: encode as sin/cos so 359° ≈ 1° (circular continuity)
     wind_dir_rad = np.radians(df['wind_direction_10m'])
@@ -304,17 +320,10 @@ def _add_atmospheric_stability_features(
     low_blh  = (boundary_layer_height < 500).astype(float)
     stag_hourly = low_wind * low_blh  # 1.0 when both conditions are met
 
-    X['stagnation_6h']  = stag_hourly.rolling(6,  min_periods=1).sum()
     X['stagnation_24h'] = stag_hourly.rolling(24, min_periods=1).sum()
     X['stagnation_48h'] = stag_hourly.rolling(48, min_periods=1).sum()
 
-    high_humidity_flag = (df['relative_humidity_2m'] > 90.0).astype(float)
-    X['fog_nitrate_index'] = (high_humidity_flag * stag_hourly).astype(float)
-
-    # Consecutive stagnation streak: how many consecutive hours has the double-trap persisted?
-    stag_groups = (stag_hourly != stag_hourly.shift()).cumsum()
-    stag_cumsum = stag_hourly.groupby(stag_groups).cumsum()
-    X['stagnation_streak_h'] = stag_cumsum
+    # fog_nitrate_index, stagnation_6h, stagnation_streak_h removed (V15: zero importance)
 
     # --- 5b. Inversion Proxy ---
     # A temperature inversion occurs when air aloft is warmer than air at
@@ -464,8 +473,7 @@ def _add_wildfire_features(
     X['hours_since_rain'] = dry_cumsum
     X['days_since_rain']  = X['hours_since_rain'] / 24.0
 
-    # Extreme Heat & Dry Flag: boolean categorical for extreme summer danger conditions
-    X['flag_extreme_heat_dry'] = ((temp_c > 35) & (rh < 25) & (wind > 10)).astype(int)
+    # flag_extreme_heat_dry removed (V15: zero importance — subsumed by wildfire_hdwi)
 
     # Weather Front Differencing (pressure and temperature gradients)
     X['pressure_diff_3h']  = df['surface_pressure'].diff(3)
@@ -483,9 +491,8 @@ def _add_wildfire_features(
         dist  = pd.to_numeric(df['fire_min_dist_raw'], errors='coerce').fillna(999.0)
         count = pd.to_numeric(df['fire_count_raw'],    errors='coerce').fillna(0)
 
-        X['fire_frp_current']       = frp
-        X['fire_min_dist_current']  = dist
-        X['fire_count_current']     = count
+        # fire_frp_current, fire_min_dist_current, fire_count_current removed (V15: zero importance)
+        # Instantaneous FIRMS values are too noisy; 24h rolling aggregates are used instead.
 
         # Roll 24 hours: NASA satellites only pass overhead ~4 times per day.
         # The fire is still burning between passes.
@@ -510,22 +517,34 @@ def _add_wildfire_features(
             wind_dir_adv = pd.to_numeric(df['wind_direction_10m'], errors='coerce')
             angle_diff_rad = np.radians(wind_dir_adv - fire_to_folsom_deg)
             alignment = np.cos(angle_diff_rad).clip(lower=0)
-            X['fire_advection_score'] = X['fire_intensity_proximity_index'] * alignment
+            # fire_advection_score kept as intermediate for 24h_max computation
+            _fire_adv = X['fire_intensity_proximity_index'] * alignment
 
-            # V8.2 Forward Alignment: match predicted wind against current fire
             fwd_wind_dir_adv = wind_dir_adv.shift(-horizon_h)
             fwd_angle_diff_rad = np.radians(fwd_wind_dir_adv - fire_to_folsom_deg)
             fwd_alignment = np.cos(fwd_angle_diff_rad).clip(lower=0)
-            X['fwd_fire_advection_score'] = X['fire_intensity_proximity_index'] * fwd_alignment
+            _fwd_fire_adv = X['fire_intensity_proximity_index'] * fwd_alignment
         else:
-            # Graceful fallback: use non-directional proxy for historical data
-            X['fire_advection_score']     = X['fire_intensity_proximity_index']
-            X['fwd_fire_advection_score'] = X['fire_intensity_proximity_index']
+            _fire_adv     = X['fire_intensity_proximity_index']
+            _fwd_fire_adv = X['fire_intensity_proximity_index']
 
-        X['fire_advection_24h_max']     = X['fire_advection_score'].rolling(24, min_periods=1).max()
-        X['fwd_fire_advection_24h_max'] = (
-            X['fire_advection_score'].rolling(24, min_periods=1).max().shift(-horizon_h)
-        )
+        # 24h rolling max — the meaningful signal (instantaneous score removed V15)
+        X['fire_advection_24h_max']     = _fire_adv.rolling(24, min_periods=1).max()
+        X['fwd_fire_advection_24h_max'] = _fwd_fire_adv.rolling(24, min_periods=1).max().shift(-horizon_h)
+
+        # V15: Fire persistence features
+        # Physics: A single FIRMS detection is noisy (cloud cover, satellite angle).
+        # Multi-day fire persistence is a much stronger signal for sustained smoke.
+        # fire_frp_7d_max: peak FRP in last 7 days — captures major fire events
+        #   even when the satellite misses a pass.
+        # fire_active_days_30d: count of days with any fire detection in last 30 days —
+        #   distinguishes a brief flare from a sustained wildfire season.
+        X['fire_frp_7d_max']      = frp.rolling(7 * 24, min_periods=1).max()
+        # fire_active_days_30d: rolling 30-day count of hours with any fire detection,
+        # divided by 24 to convert to approximate day count. Avoids resample() on
+        # tz-aware index which can produce alignment issues.
+        fire_hour_flag            = (frp > 0).astype(float)
+        X['fire_active_days_30d'] = fire_hour_flag.rolling(30 * 24, min_periods=1).sum() / 24.0
 
 
 def _add_temporal_features(
@@ -558,14 +577,14 @@ def _add_temporal_features(
     X['month_cos']       = np.cos(2 * np.pi * month / 12)
     X['day_of_week_sin'] = np.sin(2 * np.pi * day_of_week / 7)
     X['day_of_week_cos'] = np.cos(2 * np.pi * day_of_week / 7)
-    X['is_weekend']      = (day_of_week >= 5).astype(int)
+    # is_weekend removed (V15: zero importance — subsumed by dow_sin/cos cyclic encoding)
 
     # V8: Commute Traffic Harmonics
     # Second harmonic captures the bimodal AM/PM rush pattern that integer
     # dummy encoding cannot represent (23:00 is NOT "far" from 00:00).
     X['hour_sin_2'] = np.sin(2 * 2 * np.pi * hr / 24)
     X['hour_cos_2'] = np.cos(2 * 2 * np.pi * hr / 24)
-    X['weekday_rush_proxy'] = (1 - X['is_weekend']) * np.abs(np.sin(np.pi * hr / 12))
+    # weekday_rush_proxy removed (V15: low importance, depends on removed is_weekend)
 
     # Future hour (cyclic) — very predictive for long horizons
     future_hour = (hour + horizon_h) % 24
@@ -585,9 +604,8 @@ def _add_regulatory_features(
     - V9 second-order interaction features
     - V9 evening BLH collapse velocity
     """
-    # Group 7: Regulatory and Seasonal Features (V5.3)
-    X['cbyb_season_flag'] = ((df.index.month >= 11) | (df.index.month <= 2)).astype(int)
-    X['weekend_burning_proxy'] = X['is_weekend'] * X['cold_degree_hours']
+    # Group 7: Regulatory and Seasonal Features
+    # cbyb_season_flag, weekend_burning_proxy removed (V15: zero importance)
     if 'shortwave_radiation' in df.columns:
         X['radiation_accum_6h'] = (
             pd.to_numeric(df['shortwave_radiation'], errors='coerce')
@@ -596,25 +614,17 @@ def _add_regulatory_features(
     else:
         X['radiation_accum_6h'] = 0.0
 
-    # V8: Multi-Scale Atmospheric Momentum (Anti-Mean-Reversion)
-    # During fat-tail smoke events, AQI doesn't revert to mean — it follows
-    # atmospheric momentum. These features detect sustained buildups that
-    # the model should NOT predict will dissipate.
-    X['aqi_momentum_6h']  = X['aqi_ewma_6h'] - X['aqi_ewma_24h']
-    X['aqi_momentum_24h'] = X['aqi_ewma_24h'] - X['aqi_roll_168h_mean']
+    # V8: Multi-Scale Atmospheric Momentum
+    X['aqi_momentum_6h']   = X['aqi_ewma_6h'] - X['aqi_ewma_24h']
+    X['aqi_momentum_24h']  = X['aqi_ewma_24h'] - X['aqi_roll_168h_mean']
     X['momentum_accel_6h'] = X['aqi_momentum_6h'] - X['aqi_momentum_6h'].shift(6)
 
-    # Fat-tail event detector: current AQI > 2 sigma above 7-day mean
+    # Fat-tail event detector — keep zscore and persistence, drop binary flag (zero importance)
     weekly_std = X['aqi_roll_168h_std'].clip(lower=1.0)
     X['aqi_zscore_7d']            = (X['aqi_current'] - X['aqi_roll_168h_mean']) / weekly_std
-    X['fat_tail_flag']            = (X['aqi_zscore_7d'] > 2.0).astype(float)
-    X['fat_tail_persistence_48h'] = X['fat_tail_flag'].rolling(48, min_periods=1).sum()
+    X['fat_tail_persistence_48h'] = (X['aqi_zscore_7d'] > 2.0).astype(float).rolling(48, min_periods=1).sum()
 
     # V9: Second-Order Interaction Features
-    # LightGBM trees approximate multiplicative relationships across splits,
-    # but cannot reproduce them exactly. These explicit cross-products give
-    # the model a single-split shortcut to the physics the trees need
-    # multiple levels to approximate.
     X['stability_index']        = (X['fwd_temperature_mean'] + 273.15) / X['fwd_blh'].clip(lower=50)
     X['trapping_power']         = X['inversion_column_24h_mean'] / X['fwd_wind_speed_mean'].clip(lower=0.5)
     X['fwd_ventilation_stress'] = X['fwd_humidity_mean'] * X['fwd_vent_deficit']
@@ -624,15 +634,31 @@ def _add_regulatory_features(
     X['summer_photochem_accum'] = X['fwd_photochem_accum_12h'] * summer_flag
 
     # V9: Evening BLH Collapse Velocity
-    # Forensic audit found +0.99 AQI systematic underprediction in evening
-    # hours (6–12 PM). Root cause: rapid boundary layer collapse after sunset
-    # traps pollutants, and no prior feature captured this rate of change.
     X['blh_collapse_rate']     = df['boundary_layer_height'].diff(3)
     X['fwd_blh_collapse_rate'] = df['boundary_layer_height'].diff(3).shift(-horizon_h)
+    # evening_trap_flag removed (V15: zero importance)
 
-    target_hour = (df.index.hour + horizon_h) % 24
-    is_evening_target = ((target_hour >= 18) & (target_hour <= 23)).astype(float)
-    X['evening_trap_flag'] = (X['fwd_blh_collapse_rate'] < -50).astype(float) * is_evening_target
+    # V15 Tier 2: Regime-Conditional Interaction Features
+    # Physics: The dominant predictive signal changes completely by atmospheric regime.
+    # Regime 0 (well-mixed): wind features dominate — AQI will flush quickly.
+    # Regime 1 (stagnant/inversion): AQI persistence dominates — pollutants trap.
+    # Regime 2 (normal): intermediate behavior.
+    #
+    # Explicit cross-products give LightGBM a single-split shortcut to condition
+    # on regime without needing deep trees to discover the interaction.
+    # classify_regime is imported from the bottom of this file — use inline logic
+    # to avoid circular dependency.
+    wind_num  = pd.to_numeric(df['wind_speed_10m'], errors='coerce').fillna(0)
+    blh_num   = pd.to_numeric(df['boundary_layer_height'], errors='coerce').fillna(500)
+    regime_0  = ((wind_num >= 5.0) | (blh_num >= 1500.0)).astype(float)   # well-mixed
+    regime_1  = ((wind_num < 2.0)  & (blh_num < 500.0)).astype(float)     # stagnant
+
+    # Regime × AQI persistence: stagnant regime amplifies AQI persistence signal
+    X['regime1_x_aqi_current']       = regime_1 * X['aqi_current']
+    X['regime1_x_aqi_roll_24h_mean'] = regime_1 * X['aqi_roll_24h_mean']
+    # Regime × ventilation: well-mixed regime amplifies wind flushing signal
+    X['regime0_x_fwd_wind_mean']     = regime_0 * X['fwd_wind_speed_mean']
+    X['regime0_x_trapping_power']    = regime_0 * X['trapping_power']
 
 
 

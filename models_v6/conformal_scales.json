@@ -1,53 +1,125 @@
 {
-  "generated_at": "2026-04-19T18:27:08.874528",
+  "generated_at": "2026-04-19T19:16:49.399367",
   "alpha": 0.05,
   "target_coverage": 95.0,
   "cal_window_days": [
-    120,
+    365,
     60
   ],
+  "summer_months": [
+    5,
+    6,
+    7,
+    8,
+    9
+  ],
+  "winter_months": [
+    1,
+    2,
+    3,
+    4,
+    10,
+    11,
+    12
+  ],
   "scales": {
-    "6": 0.0,
-    "12": 0.0,
-    "24": 0.0,
-    "48": 0.0
+    "6": {
+      "summer": 0.0,
+      "winter": 0.0
+    },
+    "12": {
+      "summer": 0.0,
+      "winter": 0.0
+    },
+    "24": {
+      "summer": 0.0,
+      "winter": 0.0
+    },
+    "48": {
+      "summer": 0.0,
+      "winter": 0.0
+    }
   },
   "report": [
     {
       "horizon_h": 6,
-      "n_cal": 1440,
-      "raw_coverage": 99.4,
-      "cal_coverage": 99.4,
+      "season": "summer",
+      "n": 3672,
+      "raw_coverage": 99.1,
+      "cal_coverage": 99.1,
       "q_scalar": 0.0,
-      "avg_width_raw": 12.9,
-      "avg_width_cal": 12.9
+      "avg_width_raw": 32.3,
+      "avg_width_cal": 32.3
+    },
+    {
+      "horizon_h": 6,
+      "season": "winter",
+      "n": 3646,
+      "raw_coverage": 98.9,
+      "cal_coverage": 98.9,
+      "q_scalar": 0.0,
+      "avg_width_raw": 17.4,
+      "avg_width_cal": 17.4
     },
     {
       "horizon_h": 12,
-      "n_cal": 1440,
-      "raw_coverage": 99.7,
-      "cal_coverage": 99.7,
+      "season": "summer",
+      "n": 3672,
+      "raw_coverage": 99.1,
+      "cal_coverage": 99.1,
       "q_scalar": 0.0,
-      "avg_width_raw": 22.5,
-      "avg_width_cal": 22.5
+      "avg_width_raw": 43.0,
+      "avg_width_cal": 43.0
+    },
+    {
+      "horizon_h": 12,
+      "season": "winter",
+      "n": 3646,
+      "raw_coverage": 98.9,
+      "cal_coverage": 98.9,
+      "q_scalar": 0.0,
+      "avg_width_raw": 27.0,
+      "avg_width_cal": 27.0
     },
     {
       "horizon_h": 24,
-      "n_cal": 1440,
+      "season": "summer",
+      "n": 3672,
       "raw_coverage": 99.2,
       "cal_coverage": 99.2,
       "q_scalar": 0.0,
-      "avg_width_raw": 39.7,
-      "avg_width_cal": 39.7
+      "avg_width_raw": 42.1,
+      "avg_width_cal": 42.1
     },
     {
-      "horizon_h": 48,
-      "n_cal": 1440,
+      "horizon_h": 24,
+      "season": "winter",
+      "n": 3646,
       "raw_coverage": 99.0,
       "cal_coverage": 99.0,
       "q_scalar": 0.0,
-      "avg_width_raw": 55.9,
-      "avg_width_cal": 55.9
+      "avg_width_raw": 43.5,
+      "avg_width_cal": 43.5
+    },
+    {
+      "horizon_h": 48,
+      "season": "summer",
+      "n": 3672,
+      "raw_coverage": 99.0,
+      "cal_coverage": 99.0,
+      "q_scalar": 0.0,
+      "avg_width_raw": 55.3,
+      "avg_width_cal": 55.3
+    },
+    {
+      "horizon_h": 48,
+      "season": "winter",
+      "n": 3646,
+      "raw_coverage": 98.7,
+      "cal_coverage": 98.7,
+      "q_scalar": 0.0,
+      "avg_width_raw": 59.2,
+      "avg_width_cal": 59.2
     }
   ]
 }

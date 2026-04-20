@@ -80,32 +80,33 @@ _OPTUNA_PARAMS = _load_optuna_params()
 
 def _point_params(horizon_h: int) -> dict:
     """
-    Return point model (Huber) hyperparameters for the given horizon.
-    If Optuna-tuned params exist, use them; otherwise fall back to defaults.
-    Fixed params (objective, alpha, n_estimators, n_jobs) are never overridden.
+    Return point model hyperparameters for the given horizon.
+    V15: objective changed from 'huber' to 'regression_l1' (pure MAE loss).
+
+    Math: Huber(delta=2.0) ≈ MAE for |e| < 2 AQI, MSE for |e| > 2 AQI.
+    Since we evaluate on MAE, training on Huber creates a systematic bias:
+    the model over-penalizes large errors at the cost of median accuracy.
+    regression_l1 aligns training loss with evaluation metric exactly.
+    Note: 'alpha' param is removed — it is only meaningful for Huber/quantile.
     """
     # ── Check for Optuna-tuned params first ──
     tuned = _get_optuna_best(horizon_h, "point")
     if tuned is not None:
+        # Strip 'alpha' if it was saved from a Huber run — not valid for regression_l1
+        tuned_clean = {k: v for k, v in tuned.items() if k != 'alpha'}
         return {
-            # Fixed params — never tuned
-            'objective':    'huber',
-            'alpha':        2.0,          # Huber delta, NOT a quantile
+            'objective':    'regression_l1',
             'n_estimators': 4000,
             'n_jobs':       -1,
             'verbosity':    -1,
             'random_state': 42,
-            'bagging_freq': 1,            # required when bagging_fraction < 1.0
-            # Tuned params from Optuna (num_leaves, max_depth, learning_rate,
-            # min_data_in_leaf, feature_fraction, bagging_fraction, reg_alpha,
-            # reg_lambda)
-            **tuned,
+            'bagging_freq': 1,
+            **tuned_clean,
         }
 
-    # ── Fallback: hardcoded defaults (original train.py logic) ──
+    # ── Fallback: hardcoded defaults ──
     base = dict(
-        objective='huber',
-        alpha=2.0,
+        objective='regression_l1',
         n_estimators=4000,
         learning_rate=0.01,
         subsample=0.8,
@@ -257,12 +258,20 @@ def train_horizon(
     log.info("  Point model saved → %s  (best iter: %s)", point_path, point_model.best_iteration_)
 
     # 4b. Lower quantile (0.5th percentile)
-    # NOTE: No early stopping for quantile models. At 1500 trees with lr=0.01,
-    # overfitting risk is minimal and quantile loss on the small ES eval set
-    # is too noisy, causing catastrophic early stops (e.g., iter=1).
+    # V15 Tier 2: Summer sample weighting for quantile models.
+    # Summer months (May-Sep) are underrepresented in training (3 summers vs 5 winters
+    # in 2019-2024). Upweighting by 1.5× forces better coverage during high-variance
+    # wildfire/photochem months without resampling the time series.
+    summer_mask = X_train_df.index.month.isin([5, 6, 7, 8, 9])
+    sample_weights = np.where(summer_mask, 1.5, 1.0)
+    log.info("  Summer rows: %d (%.1f%%) — upweighted 1.5×",
+             summer_mask.sum(), 100 * summer_mask.mean())
+
     log.info("  Training lower quantile model (q005)...")
     q05_model = lgb.LGBMRegressor(**_quantile_params(0.005, horizon_h))
-    q05_model.fit(X_train_df, y_train, callbacks=[lgb.log_evaluation(200)])
+    q05_model.fit(X_train_df, y_train,
+                  sample_weight=sample_weights,
+                  callbacks=[lgb.log_evaluation(200)])
     q05_path = MODELS_DIR / f"lgbm_q05_{horizon_h}h.pkl"
     joblib.dump(q05_model, q05_path)
     log.info("  Q005 model saved → %s", q05_path)
@@ -270,7 +279,9 @@ def train_horizon(
     # 4c. Upper quantile (99.5th percentile)
     log.info("  Training upper quantile model (q995)...")
     q95_model = lgb.LGBMRegressor(**_quantile_params(0.995, horizon_h))
-    q95_model.fit(X_train_df, y_train, callbacks=[lgb.log_evaluation(200)])
+    q95_model.fit(X_train_df, y_train,
+                  sample_weight=sample_weights,
+                  callbacks=[lgb.log_evaluation(200)])
     q95_path = MODELS_DIR / f"lgbm_q95_{horizon_h}h.pkl"
     joblib.dump(q95_model, q95_path)
     log.info("  Q995 model saved → %s", q95_path)
@@ -450,8 +461,27 @@ def main():
         }, f, indent=2)
     log.info("  Training metrics saved → %s", metrics_path)
 
+    # V15 Tier 3: Optuna warm-start persistence.
+    # Save the best hyperparameters from this run so the next training run
+    # can use them as warm-start bounds, narrowing the search space around
+    # the known-good region rather than exploring from scratch.
+    warmstart_data: dict = {}
+    for h in HORIZONS:
+        model = point_models.get(h)
+        if model is None:
+            continue
+        params = {k: v for k, v in model.get_params().items()
+                  if k not in ('objective', 'n_estimators', 'n_jobs', 'verbosity', 'random_state')}
+        warmstart_data[f"{h}h"] = {
+            "point": {"best_params": params, "source": "train.py_v15"}
+        }
+    ws_path = MODELS_DIR / "best_optuna_params.json"
+    with open(ws_path, "w") as f:
+        json.dump(warmstart_data, f, indent=2)
+    log.info("  Warm-start params saved → %s  (%d horizons)", ws_path, len(warmstart_data))
+
     log.info("Training complete. Check 6h MAE — target is ≤ 8.0 AQI.")
-    log.info("Next: run python refresh.py")
+    log.info("Next: run python calibrate_coverage.py && python refresh.py")
 
 
 if __name__ == "__main__":

@@ -2,215 +2,105 @@
   "6h": {
     "point": {
       "best_params": {
-        "num_leaves": 166,
-        "max_depth": 10,
-        "min_data_in_leaf": 11,
+        "boosting_type": "gbdt",
+        "class_weight": null,
+        "colsample_bytree": 1.0,
+        "importance_type": "split",
         "learning_rate": 0.04665303012212833,
-        "feature_fraction": 0.9329770563201687,
-        "bagging_fraction": 0.6849356442713105,
+        "max_depth": 10,
+        "min_child_samples": 20,
+        "min_child_weight": 0.001,
+        "min_split_gain": 0.0,
+        "num_leaves": 166,
         "reg_alpha": 0.005337032762603957,
-        "reg_lambda": 0.00541524411940254
+        "reg_lambda": 0.00541524411940254,
+        "subsample": 1.0,
+        "subsample_for_bin": 200000,
+        "subsample_freq": 0,
+        "bagging_freq": 1,
+        "min_data_in_leaf": 11,
+        "feature_fraction": 0.9329770563201687,
+        "bagging_fraction": 0.6849356442713105
       },
-      "best_cv_score": 2.4324,
-      "baseline_cv_score": 3.1726,
-      "improvement_pct": 23.3,
-      "n_trials_completed": 32,
-      "early_stopped": true
-    },
-    "q01": {
-      "best_params": {
-        "num_leaves": 85,
-        "max_depth": 6,
-        "min_data_in_leaf": 43,
-        "learning_rate": 0.03389025736261604,
-        "feature_fraction": 0.6566336966609405,
-        "bagging_fraction": 0.8314188984588815,
-        "reg_alpha": 0.2881458668608976,
-        "reg_lambda": 0.11329801687497276
-      },
-      "best_cv_score": 0.1228,
-      "baseline_cv_score": 0.1813,
-      "improvement_pct": 32.3,
-      "n_trials_completed": 47,
-      "early_stopped": true
-    },
-    "q99": {
-      "best_params": {
-        "num_leaves": 151,
-        "max_depth": 9,
-        "min_data_in_leaf": 65,
-        "learning_rate": 0.01394266024930008,
-        "feature_fraction": 0.8167642515534742,
-        "bagging_fraction": 0.8078321646769134,
-        "reg_alpha": 0.004158351326254413,
-        "reg_lambda": 0.1592572793337656
-      },
-      "best_cv_score": 0.0932,
-      "baseline_cv_score": 0.1567,
-      "improvement_pct": 40.5,
-      "n_trials_completed": 73,
-      "early_stopped": true
+      "source": "train.py_v15"
     }
   },
   "12h": {
     "point": {
       "best_params": {
-        "num_leaves": 58,
-        "max_depth": 12,
-        "min_data_in_leaf": 78,
+        "boosting_type": "gbdt",
+        "class_weight": null,
+        "colsample_bytree": 1.0,
+        "importance_type": "split",
         "learning_rate": 0.04930613219897471,
-        "feature_fraction": 0.8425346265836188,
-        "bagging_fraction": 0.7091092285253512,
+        "max_depth": 12,
+        "min_child_samples": 20,
+        "min_child_weight": 0.001,
+        "min_split_gain": 0.0,
+        "num_leaves": 58,
         "reg_alpha": 1.0512730997219248,
-        "reg_lambda": 0.020702168189933184
+        "reg_lambda": 0.020702168189933184,
+        "subsample": 1.0,
+        "subsample_for_bin": 200000,
+        "subsample_freq": 0,
+        "bagging_freq": 1,
+        "min_data_in_leaf": 78,
+        "feature_fraction": 0.8425346265836188,
+        "bagging_fraction": 0.7091092285253512
       },
-      "best_cv_score": 5.7047,
-      "baseline_cv_score": 7.0414,
-      "improvement_pct": 19.0,
-      "n_trials_completed": 103,
-      "early_stopped": true
-    },
-    "q01": {
-      "best_params": {
-        "num_leaves": 126,
-        "max_depth": 5,
-        "min_data_in_leaf": 54,
-        "learning_rate": 0.03733585497555867,
-        "feature_fraction": 0.863803658152662,
-        "bagging_fraction": 0.9837126500266361,
-        "reg_alpha": 4.891382694840031,
-        "reg_lambda": 1.4283718697260943
-      },
-      "best_cv_score": 0.1838,
-      "baseline_cv_score": 0.218,
-      "improvement_pct": 15.7,
-      "n_trials_completed": 92,
-      "early_stopped": true
-    },
-    "q99": {
-      "best_params": {
-        "num_leaves": 150,
-        "max_depth": 10,
-        "min_data_in_leaf": 26,
-        "learning_rate": 0.02034426408898219,
-        "feature_fraction": 0.659107537632548,
-        "bagging_fraction": 0.6021834301509251,
-        "reg_alpha": 9.972746958726374,
-        "reg_lambda": 0.06432175368294861
-      },
-      "best_cv_score": 0.1359,
-      "baseline_cv_score": 0.2314,
-      "improvement_pct": 41.3,
-      "n_trials_completed": 66,
-      "early_stopped": true
+      "source": "train.py_v15"
     }
   },
   "24h": {
     "point": {
       "best_params": {
-        "num_leaves": 44,
-        "max_depth": 5,
-        "min_data_in_leaf": 33,
+        "boosting_type": "gbdt",
+        "class_weight": null,
+        "colsample_bytree": 1.0,
+        "importance_type": "split",
         "learning_rate": 0.04665303012212833,
-        "feature_fraction": 0.9329770563201687,
-        "bagging_fraction": 0.6849356442713105,
-        "reg_alpha": 0.005337032762603957,
-        "reg_lambda": 0.00541524411940254
-      },
-      "best_cv_score": 11.341,
-      "baseline_cv_score": 12.3032,
-      "improvement_pct": 7.8,
-      "n_trials_completed": 32,
-      "early_stopped": true
-    },
-    "q01": {
-      "best_params": {
-        "num_leaves": 61,
-        "max_depth": 3,
-        "min_data_in_leaf": 105,
-        "learning_rate": 0.015702704707333447,
-        "feature_fraction": 0.9071384312907886,
-        "bagging_fraction": 0.6429995022301934,
-        "reg_alpha": 7.1088236011052155,
-        "reg_lambda": 0.09860770594725027
-      },
-      "best_cv_score": 0.3079,
-      "baseline_cv_score": 0.3653,
-      "improvement_pct": 15.7,
-      "n_trials_completed": 74,
-      "early_stopped": true
-    },
-    "q99": {
-      "best_params": {
+        "max_depth": 5,
+        "min_child_samples": 20,
+        "min_child_weight": 0.001,
+        "min_split_gain": 0.0,
         "num_leaves": 44,
-        "max_depth": 6,
-        "min_data_in_leaf": 43,
-        "learning_rate": 0.007093575824922215,
-        "feature_fraction": 0.9827239275590516,
-        "bagging_fraction": 0.7260833707954563,
-        "reg_alpha": 8.062940554277843,
-        "reg_lambda": 0.0071764745236244445
+        "reg_alpha": 0.005337032762603957,
+        "reg_lambda": 0.00541524411940254,
+        "subsample": 1.0,
+        "subsample_for_bin": 200000,
+        "subsample_freq": 0,
+        "bagging_freq": 1,
+        "min_data_in_leaf": 33,
+        "feature_fraction": 0.9329770563201687,
+        "bagging_fraction": 0.6849356442713105
       },
-      "best_cv_score": 0.1875,
-      "baseline_cv_score": 0.201,
-      "improvement_pct": 6.7,
-      "n_trials_completed": 107,
-      "early_stopped": true
+      "source": "train.py_v15"
     }
   },
   "48h": {
     "point": {
       "best_params": {
-        "num_leaves": 72,
+        "boosting_type": "gbdt",
+        "class_weight": null,
+        "colsample_bytree": 1.0,
+        "importance_type": "split",
+        "learning_rate": 0.04190371370906655,
         "max_depth": 10,
         "min_child_samples": 42,
-        "learning_rate": 0.04190371370906655,
-        "feature_fraction": 0.6246205592861293,
-        "bagging_fraction": 0.49404966939115347,
+        "min_child_weight": 0.001,
+        "min_split_gain": 0.6884752923035218,
+        "num_leaves": 72,
         "reg_alpha": 2.401829182752737,
         "reg_lambda": 0.01917575407291713,
-        "path_smooth": 0.426935334905263,
-        "min_split_gain": 0.6884752923035218
+        "subsample": 1.0,
+        "subsample_for_bin": 200000,
+        "subsample_freq": 0,
+        "bagging_freq": 1,
+        "feature_fraction": 0.6246205592861293,
+        "bagging_fraction": 0.49404966939115347,
+        "path_smooth": 0.426935334905263
       },
-      "best_cv_score": 8.799,
-      "baseline_cv_score": 8.9,
-      "improvement_pct": 1.1,
-      "n_trials_completed": 50,
-      "source": "V10 Optuna (train_ensemble.py) — validated MAE 8.799 vs V9 8.900"
-    },
-    "q01": {
-      "best_params": {
-        "num_leaves": 28,
-        "max_depth": 3,
-        "min_data_in_leaf": 41,
-        "learning_rate": 0.00927177127911546,
-        "feature_fraction": 0.701422049444866,
-        "bagging_fraction": 0.8115093297903246,
-        "reg_alpha": 0.013837625687894642,
-        "reg_lambda": 0.034648523380305274
-      },
-      "best_cv_score": 0.2609,
-      "baseline_cv_score": 0.2551,
-      "improvement_pct": -2.3,
-      "n_trials_completed": 68,
-      "early_stopped": true
-    },
-    "q99": {
-      "best_params": {
-        "num_leaves": 44,
-        "max_depth": 6,
-        "min_data_in_leaf": 35,
-        "learning_rate": 0.005029715322065144,
-        "feature_fraction": 0.7505785865039717,
-        "bagging_fraction": 0.6042164592728725,
-        "reg_alpha": 0.0018402891970866755,
-        "reg_lambda": 0.02660771267992465
-      },
-      "best_cv_score": 0.2717,
-      "baseline_cv_score": 0.3327,
-      "improvement_pct": 18.3,
-      "n_trials_completed": 94,
-      "early_stopped": true
+      "source": "train.py_v15"
     }
   }
 }

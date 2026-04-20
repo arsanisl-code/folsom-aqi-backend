@@ -403,9 +403,14 @@ def _predict_single_horizon(
         pred_q95_sorted = max(pred_q05, pred_q95)
 
         # V14: Apply conformal calibration scalar to guarantee >= 95% coverage.
-        # q is the (1-alpha)(1+1/n) quantile of nonconformity scores from the
-        # calibration set. Expanding by q gives finite-sample coverage guarantee.
-        q_conformal = _CONFORMAL_SCALES.get(horizon_h, 0.0)
+        # V15 Tier 2: Season-aware — separate q for summer (May-Sep) and winter.
+        current_month = pd.Timestamp.now(tz=TZ).month
+        is_summer = current_month in {5, 6, 7, 8, 9}
+        h_scales  = _CONFORMAL_SCALES.get(horizon_h, {})
+        if isinstance(h_scales, dict):
+            q_conformal = h_scales.get("summer" if is_summer else "winter", 0.0)
+        else:
+            q_conformal = float(h_scales)  # backward compat with scalar format
         if q_conformal > 0.0:
             pred_q05_sorted -= q_conformal
             pred_q95_sorted += q_conformal
