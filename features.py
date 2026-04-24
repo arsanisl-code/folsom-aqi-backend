@@ -35,6 +35,19 @@ WIND_SPEED_CAP_KMH: float = 25.0
 RAIN_THRESHOLD_MM: float = 0.1
 
 
+def _add_firms_dummy_features(X: pd.DataFrame) -> None:
+    """
+    Adds dummy fire features (filled with 0) to maintain compatibility with 
+    legacy models trained with FIRMS data. Ablation studies proved these 
+    features had negligible impact, but they are required for unpickling.
+    """
+    for col in [
+        "fire_count_current", "fire_frp_24h_sum", "fire_count_24h_sum",
+        "fire_advection_score", "fire_advection_24h_max"
+    ]:
+        X[col] = 0.0
+
+
 # ─── Sub-functions ────────────────────────────────────────────────────────────
 
 
@@ -436,6 +449,8 @@ def engineer_features(
     _add_temporal_features(X, df, horizon_h)
     X = X.copy()
     _add_regulatory_features(X, df, horizon_h)
+    X = X.copy()
+    _add_firms_dummy_features(X)
     X = X.copy()
 
     if horizon_h >= 24:
