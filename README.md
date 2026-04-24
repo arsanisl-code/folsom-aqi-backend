@@ -91,7 +91,7 @@ If you use this code or model architecture in your academic research, please cit
 ```bibtex
 @article{folsomaqi2026,
   title={Physics-Informed Ensemble Forecasting for Micro-Regional Air Quality},
-  author={Your Name},
+  author={Rizk, Arsani},
   journal={TBD},
   year={2026}
 }
