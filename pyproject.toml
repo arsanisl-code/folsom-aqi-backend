@@ -12,7 +12,10 @@ select = [
     "UP", # pyupgrade
 ]
 ignore = [
-    "E501", # line too long (handled by formatting)
+    "E501", # line too long
+    "E402", # module level import not at top of file (needed for dotenv)
+    "F841", # unused variable
+    "C408", # unnecessary dict call
 ]
 
 [tool.pytest.ini_options]
