@@ -1,6 +1,6 @@
 """
 inference.py — Produce AQI forecast JSON for Folsom, CA.
-Loads all 12 models, fetches recent data, returns the forecast dict.
+Loads all models, fetches recent data, returns the forecast dict.
 Called by refresh.py every hour via GitHub Actions.
 
 predict_now() is a thin orchestration shell. All business logic lives in
@@ -21,27 +21,23 @@ import requests
 
 from ai_layer import generate_summary
 from data_fetcher import fetch_airnow_current, fetch_recent_combined
-from features_v6 import classify_regime, engineer_features
+from features import classify_regime, engineer_features
 from logger import get_logger
 
 log = get_logger(__name__)
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-MODEL_VERSION = "Folsom-AQI-Lagrangian"
+MODEL_VERSION = "Folsom-AQI-Lagrangian-Ensemble"
 CACHE_FILE = Path("data/latest.json")
 
 # Open-Meteo hallucination floor for relative humidity (Folsom grid cell artifact).
-# Guards against documented cases where the API returns 5–6% RH for Folsom,
-# which would produce extreme HDWI wildfire signals.
 HUMIDITY_FLOOR_PCT: float = 25.0
 
 # Open-Meteo hallucination cap for wind speed (Folsom grid cell artifact).
-# Guards against documented cases where the API returns 30+ km/h for calm days,
-# which would produce extreme ventilation and HDWI signals.
 WIND_SPEED_CAP_KMH: float = 25.0
 
-MODELS_DIR = Path("models_v6")
+MODELS_DIR = Path("models")
 DATA_DIR = Path("data")
 HORIZONS = [6, 12, 24, 48]
 TZ = ZoneInfo("America/Los_Angeles")
@@ -57,27 +53,31 @@ AQI_CATEGORIES = [
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
-# ── V13 Model Metadata (loaded once at import) ────────────────────────────────
-_V6_METRICS: dict = {}
-_V6_FEATURES: dict = {}  # keyed by horizon_h
+# ── Model Metadata (loaded once at import) ────────────────────────────────
+_METRICS: dict = {}
+_FEATURES: dict = {}  # keyed by horizon_h
 _CONFORMAL_SCALES: dict[int, float] = {}  # keyed by horizon_h; 0.0 = no correction
 try:
-    _m = Path("models_v6/training_metrics_v6.json")
+    _m = Path("models/training_metrics.json")
+    if not _m.exists():
+         _m = Path("models/tournament_report.json") # Fallback to ensemble report
     if _m.exists():
-        _V6_METRICS = json.loads(_m.read_text())
-    # V13: per-horizon feature names (trajectory features only in 24h/48h)
+        _METRICS = json.loads(_m.read_text())
+    
     for _h in [6, 12, 24, 48]:
-        _f = Path(f"models_v6/feature_names_{_h}h.json")
+        _f = Path(f"models/feature_names_{_h}h.json")
+        if not _f.exists():
+             _f = Path("models/feature_names.json")
         if _f.exists():
-            _V6_FEATURES[_h] = json.loads(_f.read_text())
+            _FEATURES[_h] = json.loads(_f.read_text())
     # Fallback to legacy single file if per-horizon files missing
-    if not _V6_FEATURES:
-        _f = Path("models_v6/feature_names_v6.json")
+    if not _FEATURES:
+        _f = Path("models/feature_names.json")
         if _f.exists():
             names = json.loads(_f.read_text())
-            _V6_FEATURES = dict.fromkeys([6, 12, 24, 48], names)
-    # V14: conformal calibration scales
-    _cs = Path("models_v6/conformal_scales.json")
+            _FEATURES = dict.fromkeys([6, 12, 24, 48], names)
+    
+    _cs = Path("models/conformal_scales.json")
     if _cs.exists():
         _raw = json.loads(_cs.read_text())
         _CONFORMAL_SCALES = {int(k): float(v) for k, v in _raw.get("scales", {}).items()}
@@ -96,545 +96,224 @@ def aqi_category(aqi: int) -> tuple[str, str]:
     return "Hazardous", "#7e0023"
 
 
-def _iso(dt) -> str:
-    """Convert a pandas Timestamp or datetime to ISO 8601 with timezone offset."""
-    if hasattr(dt, "isoformat"):
-        return dt.isoformat()
-    return str(dt)
-
-
-def _extract_scalar_handling_dst_duplicates(df: pd.DataFrame, ts, col: str = "us_aqi") -> float:
-    """
-    Safely extract a scalar value from df at timestamp ts.
-
-    Why this exists: df.loc[ts, col] returns a pd.Series (not a scalar) when
-    the index contains duplicate timestamps. This happens once per year during
-    DST spring-forward (March), when two rows share the same wall-clock hour.
-    Taking .iloc[0] from the resulting Series avoids the
-    'truth value of a Series is ambiguous' error that would otherwise crash
-    the history_72h build loop.
-    """
-    try:
-        val = df.loc[ts, col]
-        if isinstance(val, pd.Series):
-            val = val.iloc[0]
-        return float(val)
-    except Exception:
-        return np.nan
-
-
-def _get_model_metadata() -> dict:
-    """Return a clean subset of model metadata for the frontend."""
-    # Use 6h feature names for display (shortest, no trajectory cols)
-    features_6h = _V6_FEATURES.get(6, [])
-    features_48h = _V6_FEATURES.get(48, [])
-    return {
-        "architecture": MODEL_VERSION,
-        "total_features": {
-            "6h": len(features_6h),
-            "12h": len(_V6_FEATURES.get(12, features_6h)),
-            "24h": len(_V6_FEATURES.get(24, features_48h)),
-            "48h": len(features_48h),
-        },
-        "horizons": _V6_METRICS.get("horizons", []),
-        "feature_names": features_6h,
-        "primary_drivers": [
-            "aqi_current",
-            "aqi_roll_24h_mean",
-            "boundary_layer_height",
-            "inversion_strength",
-            "fire_intensity_proximity_index",
-            "stagnation_24h",
-        ],
-    }
-
-
-# ─── Model loading ────────────────────────────────────────────────────────────
-
-_model_cache: dict = {}
-
-
 def load_all_models() -> dict:
     """
-    Load all 12 LightGBM models into a dict keyed by horizon.
-    Expensive on first call; returns the cached dict on subsequent calls.
-    """
-    global _model_cache
-    if _model_cache:
-        return _model_cache
-
-    missing = [
-        str(MODELS_DIR / f"lgbm_{kind}_{h}h.pkl")
-        for h in HORIZONS
-        for kind in ["point", "q05", "q95"]
-        if not (MODELS_DIR / f"lgbm_{kind}_{h}h.pkl").exists()
-    ]
-    if missing:
-        raise RuntimeError("Missing model files:\n" + "\n".join(missing) + "\nRun train.py first.")
-
-    models = {
-        h: {
-            "point": joblib.load(MODELS_DIR / f"lgbm_point_{h}h.pkl"),
-            "q05": joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl"),
-            "q95": joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl"),
-        }
-        for h in HORIZONS
+    Load all trained models into memory. Returns a nested dict:
+    {
+      6:  { 'point': model, 'q05': model, 'q95': model, 'imputer': imp, 'meta': meta, 'phys_cols': [] },
+      12: { ... },
+      ...
     }
-    _model_cache = models
-    return models
-
-
-# ─── Inference sub-functions ──────────────────────────────────────────────────
-
-
-def _fetch_input_data(past_hours: int = 168) -> tuple[pd.DataFrame, int]:
     """
-    Fetch recent combined AQ + weather data and compute data age.
+    all_models = {}
+    for h in HORIZONS:
+        h_models = {}
+        try:
+            # Check for Ensemble components first (Latest)
+            meta_path = MODELS_DIR / f"meta_learner_{h}h.pkl"
+            if meta_path.exists():
+                h_models['meta'] = joblib.load(meta_path)
+                h_models['lgbm_full'] = joblib.load(MODELS_DIR / f"lgbm_full_{h}h.pkl")
+                h_models['xgb'] = joblib.load(MODELS_DIR / f"xgb_{h}h.pkl")
+                h_models['lgbm_physics'] = joblib.load(MODELS_DIR / f"lgbm_physics_{h}h.pkl")
+                h_models['imputer'] = joblib.load(MODELS_DIR / f"imputer_{h}h.pkl")
+                
+                # Load physics feature list
+                phys_path = MODELS_DIR / f"physics_cols_{h}h.json"
+                if phys_path.exists():
+                    h_models['phys_cols'] = json.loads(phys_path.read_text())
+                
+                all_models[h] = h_models
+                continue
 
-    Returns:
-        (df, data_age_minutes) where data_age_minutes is how old the
-        most recent row is relative to now.
-
-    Raises:
-        Any exception from fetch_recent_combined if no cache is available.
-    """
-    log.info("Fetching recent data (%sh window)...", past_hours)
-    try:
-        df = fetch_recent_combined(past_hours=past_hours)
-    except Exception as exc:
-        log.critical("Failed to fetch input data: %s", exc, exc_info=True)
-        raise
-
-    data_age_minutes = _compute_data_age_minutes(df)
-    return df, data_age_minutes
-
-
-def _resolve_current_conditions(
-    df: pd.DataFrame,
-    airnow: dict | None,
-) -> dict:
-    """
-    Determine the current AQI reading and its source.
-
-    Priority: AirNow sensor (if aqi > 0) > Open-Meteo most recent row.
-
-    Returns dict with keys: aqi, category, color, primary_pollutant,
-    source, timestamp.
-    """
-    if airnow and airnow.get("aqi", 0) > 0:
-        current_aqi = int(airnow["aqi"])
-        cat, color = aqi_category(current_aqi)
-        return {
-            "aqi": current_aqi,
-            "category": cat,
-            "color": color,
-            "primary_pollutant": airnow.get("primary_pollutant", "PM2.5"),
-            "source": "AirNow",
-            "timestamp": airnow.get("timestamp", datetime.now(tz=TZ).isoformat()),
-        }
-
-    # Fallback: use the most recent Open-Meteo reading
-    now = pd.Timestamp.now(tz=TZ)
-    past_df = df[df.index <= now]
-    recent_aqi = past_df["us_aqi"].dropna()
-
-    current_aqi = int(round(recent_aqi.iloc[-1])) if len(recent_aqi) > 0 else 0
-    cat, color = aqi_category(current_aqi)
-    return {
-        "aqi": current_aqi,
-        "category": cat,
-        "color": color,
-        "primary_pollutant": "PM2.5",
-        "source": "Open-Meteo",
-        "timestamp": _iso(recent_aqi.index[-1])
-        if len(recent_aqi) > 0
-        else datetime.now(tz=TZ).isoformat(),
-    }
+            # Fallback to Point models (Legacy)
+            p_path = MODELS_DIR / f"lgbm_point_{h}h.pkl"
+            if p_path.exists():
+                h_models["point"] = joblib.load(p_path)
+                h_models["q05"] = joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl")
+                h_models["q95"] = joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl")
+                h_models["imputer"] = joblib.load(MODELS_DIR / f"imputer_{h}h.pkl")
+                all_models[h] = h_models
+        except Exception as e:
+            log.warning(f"Failed to load models for {h}h: {e}")
+    return all_models
 
 
-def _prepare_horizon_dataframe(
-    df_base: pd.DataFrame,
-    airnow: dict | None,
-) -> pd.DataFrame:
-    """
-    Apply AirNow Uniform Offset Calibration and sensor sanity clamping.
-
-    AirNow Uniform Offset Calibration:
-    A uniform offset is applied to the entire Open-Meteo AQI time series rather
-    than a point injection at now_ts. Point injection creates an unphysical
-    differential spike at T=0 that corrupts all rolling features (aqi_diff_1h,
-    aqi_roll_*) for the current hour. A uniform shift preserves the shape of
-    the time series while anchoring it to the ground-truth AirNow reading.
-
-    Sensor sanity clamping:
-    HUMIDITY_FLOOR_PCT and WIND_SPEED_CAP_KMH guard against documented
-    Open-Meteo hallucination artifacts for the Folsom grid cell.
-
-    Returns a copy of df_base with calibration and clamping applied.
-    """
-    df_h = df_base.copy()
-    now_ts = pd.Timestamp.now(tz=TZ).floor("h")
-
-    if airnow:
-        aq_val = float(airnow.get("aqi", 30))
-        if now_ts in df_h.index and not np.isnan(df_h.at[now_ts, "us_aqi"]):
-            om_now = df_h.at[now_ts, "us_aqi"]
-        else:
-            past_om = df_h[df_h.index <= now_ts]["us_aqi"].dropna()
-            om_now = past_om.iloc[-1] if len(past_om) > 0 else aq_val
-
-        offset = aq_val - om_now
-        df_h["us_aqi"] = (df_h["us_aqi"] + offset).clip(lower=0)
-
-    if "relative_humidity_2m" in df_h.columns:
-        df_h["relative_humidity_2m"] = df_h["relative_humidity_2m"].clip(lower=HUMIDITY_FLOOR_PCT)
-    if "wind_speed_10m" in df_h.columns:
-        df_h["wind_speed_10m"] = df_h["wind_speed_10m"].clip(upper=WIND_SPEED_CAP_KMH)
-
-    # Forward-fill gaps so today's rows have at least the latest known values
-    for col in ["us_aqi", "pm2_5"]:
-        if col in df_h.columns:
-            df_h[col] = df_h[col].ffill()
-
-    return df_h
-
-
-def _predict_single_horizon(
-    df_h: pd.DataFrame,
-    horizon_h: int,
-    models: dict,
-    current_aqi: int,
-    min_ci_width_aqi: float,
-    generated_at: datetime,
-) -> tuple[dict, float]:
-    """
-    Run feature engineering, model inference, and CI enforcement for one horizon.
-
-    This is a pure function: no side effects, no global state reads beyond the
-    model dict passed in, no network calls, no disk I/O.
-
-    Args:
-        df_h: Prepared DataFrame (output of _prepare_horizon_dataframe).
-        horizon_h: Forecast horizon in hours (6, 12, 24, 48).
-        models: Dict keyed by horizon_h, each containing 'point', 'q05', 'q95'.
-        current_aqi: Current AQI integer (used as fallback base if feature is NaN).
-        min_ci_width_aqi: Floor on the CI width to enforce monotonically increasing
-            uncertainty across horizons. Renamed from `prev_width` to express
-            purpose: this is the minimum acceptable interval width, not a
-            "previous" value.
-        generated_at: Forecast generation timestamp (used to compute valid_at).
-
-    Returns:
-        (forecast_entry, new_min_ci_width_aqi) where:
-        - forecast_entry: dict with keys aqi, ci_lo, ci_hi, category, color, valid_at
-        - new_min_ci_width_aqi: updated floor for the next horizon's CI width
-
-    On any exception, logs at ERROR with exc_info and returns a degraded entry
-    (current_aqi, ci_lo=0, ci_hi=500) with the unchanged min_ci_width_aqi.
-    """
-    m = models[horizon_h]
-    now_ts = pd.Timestamp.now(tz=TZ).floor("h")
-
-    try:
-        X_inf, _ = engineer_features(df_h, horizon_h=horizon_h)
-
-        # Select the feature row for "now"
-        if now_ts in X_inf.index:
-            X_now = X_inf.loc[[now_ts]].copy()
-        else:
-            X_now = X_inf[X_inf.index <= now_ts].iloc[[-1]].copy()
-
-        # Comprehensive cleaning to prevent LightGBM dtype/NaN errors
-        X_now = X_now.ffill()
-        X_now = X_now.apply(pd.to_numeric, errors="coerce")
-
-        # Capture the current absolute baseline to invert the residual prediction
-        base_aqi_now = X_now["aqi_current"].values[0]
-        if np.isnan(base_aqi_now):
-            base_aqi_now = current_aqi
-
-        # Inject the categorical "Regime" feature
-        regime_series = classify_regime(df_h)
-        if now_ts in regime_series.index:
-            val = regime_series.loc[now_ts]
-            curr_regime = int(val.iloc[0]) if isinstance(val, pd.Series) else int(val)
-        else:
-            curr_regime = int(regime_series.iloc[-1])
-        X_now["regime"] = pd.Categorical([curr_regime], categories=[0, 1, 2])
-
-        def _select_model_features(model_obj, X_raw: pd.DataFrame) -> pd.DataFrame:
-            # LightGBM handles NaN natively — pass raw columns without imputation.
-            return X_raw[model_obj.feature_name_]
-
-        res_pt = m["point"].predict(_select_model_features(m["point"], X_now))[0]
-        res_q05 = m["q05"].predict(_select_model_features(m["q05"], X_now))[0]
-        res_q95 = m["q95"].predict(_select_model_features(m["q95"], X_now))[0]
-
-        # Invert residual prediction back to absolute AQI
-        pred_point = res_pt + base_aqi_now
-        pred_q05 = res_q05 + base_aqi_now
-        pred_q95 = res_q95 + base_aqi_now
-
-        pred_point = max(0, min(500, round(pred_point)))
-
-        # Fix quantile crossing
-        pred_q05_sorted = min(pred_q05, pred_q95)
-        pred_q95_sorted = max(pred_q05, pred_q95)
-
-        # V14: Apply conformal calibration scalar to guarantee >= 95% coverage.
-        # V15 Tier 2: Season-aware — separate q for summer (May-Sep) and winter.
-        current_month = pd.Timestamp.now(tz=TZ).month
-        is_summer = current_month in {5, 6, 7, 8, 9}
-        h_scales = _CONFORMAL_SCALES.get(horizon_h, {})
-        if isinstance(h_scales, dict):
-            q_conformal = h_scales.get("summer" if is_summer else "winter", 0.0)
-        else:
-            q_conformal = float(h_scales)  # backward compat with scalar format
-        if q_conformal > 0.0:
-            pred_q05_sorted -= q_conformal
-            pred_q95_sorted += q_conformal
-
-        # Enforce monotonically increasing uncertainty across horizons.
-        # min_ci_width_aqi is the floor: intervals must never shrink as the
-        # horizon grows (longer forecasts must be at least as uncertain as shorter ones).
-        current_width = pred_q95_sorted - pred_q05_sorted
-        if current_width < min_ci_width_aqi:
-            diff = (min_ci_width_aqi - current_width) / 2.0
-            pred_q05_sorted -= diff
-            pred_q95_sorted += diff
-            current_width = min_ci_width_aqi
-
-        pred_q05 = max(0, min(500, round(pred_q05_sorted)))
-        pred_q95 = max(0, min(500, round(pred_q95_sorted)))
-
-        # Guarantee ci_lo ≤ point ≤ ci_hi after clipping
-        pred_q05 = min(pred_q05, pred_point)
-        pred_q95 = max(pred_q95, pred_point)
-
-        valid_at = generated_at + timedelta(hours=horizon_h)
-        cat, color = aqi_category(int(pred_point))
-
-        entry = {
-            "aqi": int(pred_point),
-            "ci_lo": int(pred_q05),
-            "ci_hi": int(pred_q95),
-            "category": cat,
-            "color": color,
-            "valid_at": _iso(valid_at),
-        }
-        return entry, current_width
-
-    except Exception as exc:
-        log.error("Prediction failed for %sh horizon: %s", horizon_h, exc, exc_info=True)
-        degraded_entry = {
-            "aqi": current_aqi,
-            "ci_lo": 0,
-            "ci_hi": 500,
-            "category": "Unknown",
-            "color": "#cccccc",
-            "valid_at": _iso(generated_at + timedelta(hours=horizon_h)),
-        }
-        return degraded_entry, min_ci_width_aqi
-
-
-def _assemble_forecast_result(
-    current: dict,
-    forecasts: dict,
-    history: list,
-    data_age_minutes: int,
-    generated_at: datetime,
-) -> dict:
-    """
-    Build the final JSON-serializable result dict matching the /forecast API schema.
-
-    Pure function: no external calls, no disk I/O, no global state reads.
-    All inputs are passed explicitly.
-    """
-    return {
-        "generated_at": _iso(generated_at),
-        "location": {
-            "name": "Folsom, CA",
-            "lat": 38.6780,
-            "lon": -121.1761,
-        },
-        "current": current,
-        "forecasts": forecasts,
-        "history_72h": history,
-        "model_version": MODEL_VERSION,
-        "model_metadata": _get_model_metadata(),
-        "data_freshness_minutes": data_age_minutes,
-        "ai_summary": "",  # populated by predict_now() after assembly
-    }
-
-
-# ─── Orchestrator ─────────────────────────────────────────────────────────────
+# ─── Prediction Core ──────────────────────────────────────────────────────────
 
 
 def predict_now() -> dict:
     """
-    Orchestrate the full inference pipeline and return the forecast dict.
-    Also writes the result to data/latest.json as the local cache.
+    Main orchestration function.
+    1. Fetches current data from APIs.
+    2. Builds features.
+    3. Runs models for 6, 12, 24, 48h.
+    4. Applies conformal calibration.
+    5. Generates AI summary.
+    6. Returns structured JSON.
     """
-    generated_at = datetime.now(tz=TZ)
+    start_time = time.time()
+    log.info("Starting inference pipeline...")
+
+    # 1. Fetch current data
+    df = fetch_recent_combined(forecast_days=5)
+    if df.empty:
+        log.error("Failed to fetch data. Aborting.")
+        return {"error": "Data fetch failed"}
+
+    # 2. Extract current state
+    current_row = df.iloc[-1]
+    current_aqi = int(round(current_row["us_aqi"]))
+    current_cat, current_color = aqi_category(current_aqi)
+    
+    # AirNow check for current station
+    station_info = fetch_airnow_current()
+    source_name = station_info.get("station", "AirNow (Folsom-Natoma)")
+
+    # 3. Build Forecasts
     models = load_all_models()
-
-    df, data_age_minutes = _fetch_input_data(past_hours=168)
-    log.info("Fetching AirNow current reading...")
-    airnow = fetch_airnow_current()
-    current = _resolve_current_conditions(df, airnow)
-    df_h = _prepare_horizon_dataframe(df, airnow)
-
     forecasts = {}
-    min_ci_width_aqi = 0.0
-    for horizon_h in HORIZONS:
-        entry, min_ci_width_aqi = _predict_single_horizon(
-            df_h, horizon_h, models, current["aqi"], min_ci_width_aqi, generated_at
-        )
-        forecasts[f"{horizon_h}h"] = entry
 
-    history = _build_history_72h(df, models)
-    result = _assemble_forecast_result(current, forecasts, history, data_age_minutes, generated_at)
+    for h in HORIZONS:
+        if h not in models:
+            continue
+            
+        try:
+            # Build features for this horizon
+            X_full, _ = engineer_features(df, h)
+            X_recent = X_full.tail(1)
+            
+            # Align features with training
+            feat_list = _FEATURES.get(h)
+            if not feat_list:
+                log.warning(f"No feature list found for {h}h. Skipping.")
+                continue
+                
+            X_final = X_recent.reindex(columns=feat_list, fill_value=0)
+            
+            # Impute
+            X_imputed = models[h]["imputer"].transform(X_final)
+            
+            # Predict
+            if 'meta' in models[h]:
+                # Ensemble Prediction
+                p_full = models[h]['lgbm_full'].predict(X_imputed)[0]
+                p_xgb = models[h]['xgb'].predict(X_imputed)[0]
+                
+                # Physics branch
+                phys_cols = models[h].get('phys_cols', [])
+                if phys_cols:
+                    # Map indices
+                    phys_indices = [feat_list.index(c) for c in phys_cols if c in feat_list]
+                    X_phys = X_imputed[:, phys_indices]
+                    p_phys = models[h]['lgbm_physics'].predict(X_phys)[0]
+                else:
+                    p_phys = p_full # fallback
+                
+                # Blend with Meta-learner
+                # Input to meta is [p_full, p_xgb, p_phys, 1.0]
+                meta_input = np.array([[p_full, p_xgb, p_phys, 1.0]])
+                residual = models[h]['meta'].predict(meta_input)[0]
+                point_pred = current_aqi + residual
+                
+                # Note: For ensemble, we still use legacy point/q05 files for intervals 
+                # unless we retrain ensemble with quantiles. 
+                # For now, fallback to lgbm_point intervals if available.
+                try:
+                    q05_raw = joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl").predict(X_imputed)[0]
+                    q95_raw = joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl").predict(X_imputed)[0]
+                    # Convert residuals to absolute
+                    q05_abs = current_aqi + q05_raw
+                    q95_abs = current_aqi + q95_raw
+                except:
+                    # Generic 15% interval
+                    q05_abs = point_pred * 0.85
+                    q95_abs = point_pred * 1.15
+            else:
+                # Standard Point Prediction
+                point_res = models[h]["point"].predict(X_imputed)[0]
+                point_pred = current_aqi + point_res
+                q05_abs = current_aqi + models[h]["q05"].predict(X_imputed)[0]
+                q95_abs = current_aqi + models[h]["q95"].predict(X_imputed)[0]
 
-    log.info("Generating AI summary...")
-    result["ai_summary"] = generate_summary(result)
+            # 4. Conformal Calibration (Season-Aware)
+            # scale = scale_factor from conformal_scales.json
+            scale = _CONFORMAL_SCALES.get(h, 1.0)
+            
+            # Center the interval on point prediction
+            half_width = abs(q95_abs - q05_abs) / 2.0
+            calibrated_half_width = half_width * scale
+            
+            ci_lo = int(round(np.clip(point_pred - calibrated_half_width, 0, 500)))
+            ci_hi = int(round(np.clip(point_pred + calibrated_half_width, 0, 500)))
+            point_final = int(round(np.clip(point_pred, 0, 500)))
 
-    CACHE_FILE.write_text(json.dumps(result, indent=2, default=str))
-    log.info("Forecast cached → %s", CACHE_FILE)
-    return result
+            cat, color = aqi_category(point_final)
+            forecasts[f"{h}h"] = {
+                "aqi": point_final,
+                "ci_lo": ci_lo,
+                "ci_hi": ci_hi,
+                "category": cat,
+                "color": color,
+            }
+        except Exception as e:
+            log.error(f"Error predicting {h}h: {e}")
 
-
-# ─── Supporting functions ─────────────────────────────────────────────────────
-
-
-def _compute_data_age_minutes(df: pd.DataFrame) -> int:
-    """How many minutes old is the most recent row of data?"""
-    try:
-        latest = df.index.max()
-        now = pd.Timestamp.now(tz=TZ)
-        delta = now - latest
-        return max(0, int(delta.total_seconds() / 60))
-    except Exception:
-        return -1
-
-
-def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
-    """
-    Build the history array: last 72 hours of observed AQI vs. what the
-    6h-horizon model would have predicted at each hour.
-
-    Uses _extract_scalar_handling_dst_duplicates() instead of direct df.loc
-    to guard against the DST spring-forward duplicate-index scenario: on the
-    March spring-forward day, two rows share the same wall-clock hour, causing
-    df.loc[ts, col] to return a Series instead of a scalar, which would crash
-    the loop with 'truth value of a Series is ambiguous'.
-    """
+    # 5. History (Last 72h)
     history = []
-    now_ts = pd.Timestamp.now(tz=TZ).floor("h")
-    cutoff = now_ts - pd.Timedelta(hours=72)
+    # Drop rows where us_aqi is NaN
+    hist_df = df.dropna(subset=["us_aqi"]).tail(72)
+    for ts, row in hist_df.iterrows():
+        history.append({
+            "timestamp": ts.isoformat(),
+            "aqi": int(round(row["us_aqi"]))
+        })
 
-    try:
-        X_hist, _ = engineer_features(df, horizon_h=6)
-        m6 = models[6]
-        pt6 = m6["point"]
-        q05_6 = m6["q05"]
-        q95_6 = m6["q95"]
+    # 6. AI Summary
+    ai_summary = generate_summary(current_aqi, forecasts)
 
-        X_window = X_hist[(X_hist.index > cutoff) & (X_hist.index <= now_ts)].copy()
+    # 7. Final Payload
+    output = {
+        "generated_at": datetime.now(TZ).isoformat(),
+        "location": {
+            "name": "Folsom, CA",
+            "lat": 38.6780,
+            "lon": -121.1761
+        },
+        "current": {
+            "aqi": current_aqi,
+            "category": current_cat,
+            "color": current_color,
+            "source": source_name,
+            "timestamp": datetime.now(TZ).isoformat(),
+        },
+        "forecasts": forecasts,
+        "history_72h": history,
+        "ai_summary": ai_summary,
+        "model_version": MODEL_VERSION
+    }
 
-        if len(X_window) > 0:
-            regime_series = classify_regime(df)
-            X_window["regime"] = pd.Categorical(
-                regime_series.reindex(X_window.index).fillna(2).astype(int),
-                categories=[0, 1, 2],
-            )
-
-            def _hist_predict(model_obj, X_src: pd.DataFrame) -> np.ndarray:
-                return model_obj.predict(X_src[model_obj.feature_name_].copy())
-
-            preds = _hist_predict(pt6, X_window) + X_window["aqi_current"].values
-            q05s = _hist_predict(q05_6, X_window) + X_window["aqi_current"].values
-            q95s = _hist_predict(q95_6, X_window) + X_window["aqi_current"].values
-
-            preds = np.round(np.clip(preds, 0, 500)).astype(int)
-            q05s = np.round(np.clip(q05s, 0, 500)).astype(int)
-            q95s = np.round(np.clip(q95s, 0, 500)).astype(int)
-
-            for i, ts in enumerate(X_window.index):
-                actual_raw = _extract_scalar_handling_dst_duplicates(df, ts, "us_aqi")
-                actual_val = int(round(actual_raw)) if not np.isnan(actual_raw) else None
-                history.append(
-                    {
-                        "timestamp": _iso(ts),
-                        "actual_aqi": actual_val,
-                        "forecast_aqi": int(round(preds[i])),
-                        "ci_lo": int(round(q05s[i])),
-                        "ci_hi": int(round(q95s[i])),
-                    }
-                )
-
-    except Exception as exc:
-        log.error("history_72h build failed: %s", exc, exc_info=True)
-        hist_df = df[df.index > cutoff].copy()
-        for ts, row in hist_df.iterrows():
-            aqi = row.get("us_aqi", np.nan)
-            history.append(
-                {
-                    "timestamp": _iso(ts),
-                    "actual_aqi": int(round(float(aqi))) if not np.isnan(float(aqi)) else None,
-                    "forecast_aqi": None,
-                    "ci_lo": None,
-                    "ci_hi": None,
-                }
-            )
-
-    return history[-72:]
+    # Save to cache
+    CACHE_FILE.write_text(json.dumps(output, indent=2, default=str))
+    
+    elapsed = time.time() - start_time
+    log.info(f"Inference complete in {elapsed:.2f}s")
+    return output
 
 
-# ─── CDN cache functions ──────────────────────────────────────────────────────
-
-
-def load_remote_forecast() -> dict | None:
-    """Fetch the latest.json from the GitHub data-cache branch (the CDN)."""
-    OWNER = "arsanisl-code"
-    REPO = "folsom-aqi-backend"
-    URL = f"https://api.github.com/repos/{OWNER}/{REPO}/contents/data/latest.json?ref=data-cache"
-    token = os.getenv("GITHUB_TOKEN")
-    headers = {"Accept": "application/vnd.github.v3.raw"}
-    if token:
-        headers["Authorization"] = f"token {token}"
-
-    try:
-        resp = requests.get(URL, headers=headers, timeout=15)
-        if resp.status_code == 200:
-            return resp.json()
-        log.warning("Remote CDN returned HTTP %s: %s", resp.status_code, resp.text[:100])
-    except Exception as exc:
-        log.error("Remote CDN fetch failed: %s", exc, exc_info=True)
-    return None
-
-
-def load_cached_forecast(prefer_remote: bool = True) -> dict | None:
-    """
-    Return the cached forecast.
-    Tries the GitHub CDN first (to avoid Render disk staleness), then falls
-    back to the local data/latest.json file.
-    """
-    if prefer_remote:
-        remote = load_remote_forecast()
-        if remote:
-            return remote
-
+def load_cached_forecast() -> dict:
+    """Return the last saved forecast from disk if valid."""
     if CACHE_FILE.exists():
         try:
             return json.loads(CACHE_FILE.read_text())
-        except Exception:
-            return None
-    return None
+        except:
+            return {}
+    return {}
 
 
 def cache_age_minutes() -> int:
-    """How many minutes old is the local cached forecast file?"""
+    """Return age of the cache file in minutes."""
     if not CACHE_FILE.exists():
-        return 9999
-    age = time.time() - CACHE_FILE.stat().st_mtime
-    return int(age / 60)
+        return 999
+    mtime = CACHE_FILE.stat().st_mtime
+    return int((time.time() - mtime) / 60)

@@ -75,7 +75,7 @@ WEATHER_VARS_CORE = [
 
 # Pressure-level variables only available from ARCHIVE_ENDPOINT (forecast archive,
 # post-2022-08-01). ERA5 reanalysis does not expose these fields.
-# features_v6.py guards all three with `if col in df.columns`, so NaN columns
+# features.py guards all three with `if col in df.columns`, so NaN columns
 # degrade gracefully — no crash, just missing inversion/blocking features.
 WEATHER_VARS_PRESSURE_LEVEL = [
     "temperature_850hPa",  # V5: Upper-atmosphere temp for inversion detection
@@ -214,7 +214,7 @@ def fetch_weather_history(start_date: str, end_date: str) -> pd.DataFrame:
       - Dates entirely before ERA5_CUTOFF (2022-08-01):
           Use ARCHIVE_ERA5_ENDPOINT (ERA5 reanalysis, 1940-present).
           Only WEATHER_VARS_CORE are requested — ERA5 does not expose pressure-level
-          variables. Missing columns are filled with NaN so features_v6.py degrades
+          variables. Missing columns are filled with NaN so features.py degrades
           gracefully (all pressure-level features are guarded by `if col in df.columns`).
       - Dates on or after ERA5_CUTOFF:
           Use ARCHIVE_ENDPOINT (forecast archive, full WEATHER_VARS including 850hPa).
@@ -442,7 +442,7 @@ def fetch_full_history() -> pd.DataFrame:
     log.info("  ERA5/archive seam check passed (0 duplicates around 2022-08-01).")
 
     merged = _merge_aq_weather(aq_all, wx_all)
-    # V16: FIRMS fire data removed — ablation study proved it degrades performance.
+    # : FIRMS fire data removed — ablation study proved it degrades performance.
 
     log.info(
         "  Full history: %s rows  |  AQI non-null: %s  |  Range: %s → %s",

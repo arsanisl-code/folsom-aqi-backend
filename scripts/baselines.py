@@ -14,11 +14,11 @@ Evaluates two naive forecasting models on the 2025 holdout set:
    Built from 2019-2024 training data ONLY — no holdout leakage.
    Captures diurnal and seasonal patterns without any dynamic information.
 
-Both baselines use the same train/holdout split as V15:
+Both baselines use the same train/holdout split as :
   Train:   2019-01-01 → 2024-12-31
   Holdout: 2025-01-01 → 2025-12-31
 
-Output: models_v6/naive_baselines.json
+Output: models/naive_baselines.json
 """
 
 import json
@@ -35,7 +35,7 @@ from logger import get_logger
 
 log = get_logger(__name__)
 
-MODELS_DIR = Path("models_v6")
+MODELS_DIR = Path("models")
 OUTPUT_PATH = MODELS_DIR / "naive_baselines.json"
 TRAIN_CUTOFF = datetime(2024, 12, 31, 23, 59, 59)
 HOLDOUT_YEAR = 2025

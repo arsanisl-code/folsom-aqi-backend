@@ -13,7 +13,7 @@ Math (Split Conformal Prediction):
     Reference: Angelopoulos & Bates (2021).
 
 Artifacts:
-    models_v6/conformal_scales.json
+    models/conformal_scales.json
 """
 
 import json
@@ -26,12 +26,12 @@ import numpy as np
 import pandas as pd
 
 from data_fetcher import fetch_full_history
-from features_v6 import engineer_features
+from features import engineer_features
 from logger import get_logger
 
 log = get_logger(__name__)
 
-MODELS_DIR = Path("models_v6")
+MODELS_DIR = Path("models")
 OUTPUT_PATH = MODELS_DIR / "conformal_scales.json"
 HORIZONS = [6, 12, 24, 48]
 ALPHA = 0.05  # 95% coverage target

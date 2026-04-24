@@ -2,10 +2,10 @@
 generate_paper_tables.py — Module 3: Academic Metric Synthesizer.
 
 Reads three JSON artifacts and produces a publication-ready comparison table:
-  - models_v6/training_metrics_v6.json   → V15 Full model (val set)
-  - backtest_v12_2025_report.json        → V15 Full model (2025 holdout)
-  - models_v6/ablation_metrics.json      → V15 Ablated (no fire features)
-  - models_v6/naive_baselines.json       → Persistence + Climatology
+  - models/training_metrics_.json   →  Full model (val set)
+  - backtest__2025_report.json        →  Full model (2025 holdout)
+  - models/ablation_metrics.json      →  Ablated (no fire features)
+  - models/naive_baselines.json       → Persistence + Climatology
 
 Outputs:
   - paper_table_1.md   — Markdown table for direct inclusion in paper
@@ -24,10 +24,10 @@ import json
 import sys
 from pathlib import Path
 
-MODELS_DIR = Path("models_v6")
+MODELS_DIR = Path("models")
 
 # Input paths
-HOLDOUT_PATH = Path("backtest_v12_2025_report.json")
+HOLDOUT_PATH = Path("backtest__2025_report.json")
 ABLATION_PATH = MODELS_DIR / "ablation_metrics.json"
 BASELINES_PATH = MODELS_DIR / "naive_baselines.json"
 
@@ -62,7 +62,7 @@ def generate():
     baselines = _load(BASELINES_PATH)
 
     # ── Index all data by horizon ─────────────────────────────────────────
-    v15_full: dict[int, dict] = {r["horizon_h"]: r for r in holdout["annual"]}
+    _full: dict[int, dict] = {r["horizon_h"]: r for r in holdout["annual"]}
     ablated: dict[int, dict] = {r["horizon_h"]: r for r in ablation["horizons"]}
     persistence: dict[int, dict] = {
         r["horizon_h"]: r for r in baselines["baselines"]["persistence"]
@@ -74,7 +74,7 @@ def generate():
     # ── Verify all horizons present ───────────────────────────────────────
     for h in HORIZONS:
         for name, d in [
-            ("V15 Full", v15_full),
+            (" Full", _full),
             ("Ablated", ablated),
             ("Persistence", persistence),
             ("Climatology", climatology),
@@ -108,7 +108,7 @@ def generate():
         rows.append(
             {
                 "horizon": f"{h}h",
-                "model": "V15 Ablated (no fire)",
+                "model": " Ablated (no fire)",
                 "mae": ablated[h]["mae"],
                 "r2": ablated[h]["r2"],
                 "skill": _skill(ablated[h]["mae"], p_mae),
@@ -117,10 +117,10 @@ def generate():
         rows.append(
             {
                 "horizon": f"{h}h",
-                "model": "V15 Full (ours)",
-                "mae": v15_full[h]["mae_v12"],
-                "r2": v15_full[h]["r2_v12"],
-                "skill": _skill(v15_full[h]["mae_v12"], p_mae),
+                "model": " Full (ours)",
+                "mae": _full[h]["mae_"],
+                "r2": _full[h]["r2_"],
+                "skill": _skill(_full[h]["mae_"], p_mae),
             }
         )
 
@@ -142,8 +142,8 @@ def generate():
         if sep and r["model"] == "Climatology":
             pass  # no separator needed within same horizon
         horizon_cell = r["horizon"] if r["horizon"] != prev_horizon else ""
-        bold_open = "**" if r["model"] == "V15 Full (ours)" else ""
-        bold_close = "**" if r["model"] == "V15 Full (ours)" else ""
+        bold_open = "**" if r["model"] == " Full (ours)" else ""
+        bold_close = "**" if r["model"] == " Full (ours)" else ""
         skill_str = f"{r['skill']:+.1f}%" if r["model"] != "Persistence" else "---"
         md_lines.append(
             f"| {bold_open}{horizon_cell}{bold_close} "
@@ -156,9 +156,9 @@ def generate():
 
     md_lines += [
         "",
-        "> **Bold** = our proposed V15 Full model.",
+        "> **Bold** = our proposed  Full model.",
         "> Skill Score measures improvement over the Persistence baseline.",
-        "> V15 Ablated removes all FIRMS fire-detection features while retaining",
+        ">  Ablated removes all FIRMS fire-detection features while retaining",
         "> wind-derived trajectory origin coordinates.",
     ]
 
@@ -188,12 +188,12 @@ def generate():
     print("-" * 60)
     for r in rows:
         skill_str = f"{r['skill']:+.1f}%" if r["model"] != "Persistence" else "---"
-        marker = " ◄" if r["model"] == "V15 Full (ours)" else ""
+        marker = " ◄" if r["model"] == " Full (ours)" else ""
         print(
             f"{r['horizon']:<8} {r['model']:<25} {r['mae']:>8.2f} "
             f"{r['r2']:>7.3f} {skill_str:>8}{marker}"
         )
-        if r["model"] == "V15 Full (ours)" and r["horizon"] != "48h":
+        if r["model"] == " Full (ours)" and r["horizon"] != "48h":
             print()
 
     # ── Reviewer assertions ───────────────────────────────────────────────
@@ -201,15 +201,15 @@ def generate():
     print("REVIEWER CHECKS:")
     all_pass = True
     for h in HORIZONS:
-        v15_mae = v15_full[h]["mae_v12"]
+        _mae = _full[h]["mae_"]
         p_mae = persistence[h]["mae"]
         abl_mae = ablated[h]["mae"]
-        v15_r2 = v15_full[h]["r2_v12"]
+        _r2 = _full[h]["r2_"]
         p_r2 = persistence[h]["r2"]
 
         checks = [
-            (v15_mae < p_mae, f"{h}h: V15 MAE ({v15_mae}) < Persistence MAE ({p_mae})"),
-            (v15_r2 > p_r2, f"{h}h: V15 R² ({v15_r2}) > Persistence R² ({p_r2})"),
+            (_mae < p_mae, f"{h}h:  MAE ({_mae}) < Persistence MAE ({p_mae})"),
+            (_r2 > p_r2, f"{h}h:  R² ({_r2}) > Persistence R² ({p_r2})"),
         ]
         for passed, msg in checks:
             status = "✓" if passed else "✗ FAIL"

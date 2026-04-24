@@ -13,7 +13,7 @@ Leakage prevention:
   3. fwd_* features use shift(-horizon_h) which is legitimate NWP proxy.
 
 Usage:
-    python backtest_v12.py
+    python backtest_.py
 """
 
 import json
@@ -28,7 +28,7 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, r2_score
 
 from data_fetcher import fetch_full_history
-from features_v6 import engineer_features
+from features import engineer_features
 from logger import get_logger
 from train import _point_params, _quantile_params
 
@@ -188,8 +188,8 @@ def run_backtest():
 
     df_res = pd.DataFrame(results)
 
-    # Load V6 baseline for comparison
-    baseline_path = Path("backtest_v6_2025_report.csv")
+    # Load  baseline for comparison
+    baseline_path = Path("backtest__2025_report.csv")
     if baseline_path.exists():
         df_base = pd.read_csv(baseline_path)
         df_base.columns = [c.lower() for c in df_base.columns]
@@ -215,28 +215,28 @@ def run_backtest():
             continue
 
         weights = h_rows["n"].values
-        mae_v12 = float(np.average(h_rows["mae"].values, weights=weights))
-        r2_v12 = float(np.average(h_rows["r2"].values, weights=weights))
-        cov_v12 = float(np.average(h_rows["coverage"].values, weights=weights))
+        mae_ = float(np.average(h_rows["mae"].values, weights=weights))
+        r2_ = float(np.average(h_rows["r2"].values, weights=weights))
+        cov_ = float(np.average(h_rows["coverage"].values, weights=weights))
 
-        mae_v6 = float("nan")
+        mae_ = float("nan")
         if has_baseline:
             b_rows = df_base[df_base["horizon"] == f"{h}h"]
             if not b_rows.empty:
-                mae_v6 = b_rows["mae"].mean()
+                mae_ = b_rows["mae"].mean()
 
-        delta = mae_v12 - mae_v6 if not np.isnan(mae_v6) else float("nan")
+        delta = mae_ - mae_ if not np.isnan(mae_) else float("nan")
         delta_str = f"{delta:+.2f}" if not np.isnan(delta) else "N/A"
-        v6_str = f"{mae_v6:.2f}" if not np.isnan(mae_v6) else "N/A"
+        _str = f"{mae_:.2f}" if not np.isnan(mae_) else "N/A"
 
         log.info(
             "  %-6s  %-8.2f  %-8s  %-8s  %-10.3f  %.1f%%",
             f"{h}h",
-            mae_v12,
-            v6_str,
+            mae_,
+            _str,
             delta_str,
-            r2_v12,
-            cov_v12,
+            r2_,
+            cov_,
         )
 
         # Season-stratified breakdown
@@ -253,11 +253,11 @@ def run_backtest():
         annual.append(
             {
                 "horizon_h": h,
-                "mae_v12": round(mae_v12, 2),
-                "mae_v6": round(mae_v6, 2) if not np.isnan(mae_v6) else None,
+                "mae_": round(mae_, 2),
+                "mae_": round(mae_, 2) if not np.isnan(mae_) else None,
                 "delta_mae": round(delta, 2) if not np.isnan(delta) else None,
-                "r2_v12": round(r2_v12, 3),
-                "coverage": round(cov_v12, 1),
+                "r2_": round(r2_, 3),
+                "coverage": round(cov_, 1),
             }
         )
 

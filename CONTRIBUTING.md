@@ -19,7 +19,7 @@ Thank you for your interest in contributing to the Folsom AQI backend! We welcom
 If you are contributing physical models, feature engineering heuristics, or new Lagrangian trajectory approximations:
 - Please ensure that **no data leakage** occurs
 - Document the physical rationale behind new features in the code comments, citing relevant meteorological or atmospheric chemistry papers if applicable.
-- Update `features_v6.py` logically, maintaining the `engineer_features()` pure-function paradigm.
+- Update `features.py` logically, maintaining the `engineer_features()` pure-function paradigm.
 
 ## Model Training
 

@@ -3,7 +3,7 @@ ablation_runner.py — Module 2: Wildfire Feature Ablation Study.
 
 Purpose:
     Prove that the Lagrangian FIRMS trajectory and fire detection features
-    add genuine predictive value by training an identical V15 architecture
+    add genuine predictive value by training an identical  architecture
     with all fire-detection features removed (ablation_mode=True).
 
 Ablation scope (fire-detection features dropped):
@@ -21,13 +21,13 @@ This isolates the causal question:
      beyond what wind transport direction alone can tell us?"
 
 Methodology:
-    - Identical train/holdout split as V15: train ≤ 2024-12-31, holdout = 2025
-    - Identical loss function: regression_l1 (V15 standard)
+    - Identical train/holdout split as : train ≤ 2024-12-31, holdout = 2025
+    - Identical loss function: regression_l1 ( standard)
     - Identical imputer discipline: fit on train only, transform holdout
     - Identical hyperparameters: loaded from best_optuna_params.json
-    - No re-tuning (ablation uses same HPO params as V15 full model)
+    - No re-tuning (ablation uses same HPO params as  full model)
 
-Output: models_v6/ablation_metrics.json
+Output: models/ablation_metrics.json
 """
 
 import json
@@ -42,13 +42,13 @@ from sklearn.impute import SimpleImputer
 from sklearn.metrics import mean_absolute_error, r2_score
 
 from data_fetcher import fetch_full_history
-from features_v6 import engineer_features
+from features import engineer_features
 from logger import get_logger
 from train import _point_params
 
 log = get_logger(__name__)
 
-MODELS_DIR = Path("models_v6")
+MODELS_DIR = Path("models")
 OUTPUT_PATH = MODELS_DIR / "ablation_metrics.json"
 TRAIN_CUTOFF = datetime(2024, 12, 31, 23, 59, 59)
 HOLDOUT_YEAR = 2025
@@ -145,7 +145,7 @@ def run_ablation():
         X_tr_df = pd.DataFrame(X_tr_imp, columns=X_tr.columns, index=X_tr.index)
         X_ho_df = pd.DataFrame(X_ho_imp, columns=X_ho.columns, index=X_ho.index)
 
-        # ── Train point model — same params as V15 (regression_l1) ───────
+        # ── Train point model — same params as  (regression_l1) ───────
         # ES split: last 30 days of training window
         es_cutoff = train_cutoff_ts - pd.Timedelta(days=30)
         es_mask = X_tr_df.index >= es_cutoff
@@ -188,14 +188,14 @@ def run_ablation():
     # ── Reviewer sanity checks ────────────────────────────────────────────
     log.info("=" * 65)
     log.info("  ABLATION SANITY CHECKS")
-    log.info("  (Ablated MAE should be >= V15 full MAE at 24h/48h)")
-    v15_mae = {6: 2.81, 12: 5.37, 24: 7.20, 48: 8.50}
+    log.info("  (Ablated MAE should be >=  full MAE at 24h/48h)")
+    _mae = {6: 2.81, 12: 5.37, 24: 7.20, 48: 8.50}
     for r in results:
         h = r["horizon_h"]
-        diff = r["mae"] - v15_mae.get(h, 0)
+        diff = r["mae"] - _mae.get(h, 0)
         flag = "✓ fire features help" if diff > 0 else "⚠ unexpected — check"
         log.info(
-            "  %sh: ablated=%.2f  v15=%.2f  Δ=%+.2f  %s", h, r["mae"], v15_mae.get(h, 0), diff, flag
+            "  %sh: ablated=%.2f  =%.2f  Δ=%+.2f  %s", h, r["mae"], _mae.get(h, 0), diff, flag
         )
 
     # ── Save ──────────────────────────────────────────────────────────────
