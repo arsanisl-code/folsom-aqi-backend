@@ -149,7 +149,7 @@ def _get_physics_cols(X: pd.DataFrame) -> list[str]:
 def _load_v9_warmstart(horizon_h: int) -> dict:
     """Load V9 Optuna best params for LGBM-Full warm-start."""
     for fname in ("best_optuna_params_v9.json", "best_optuna_params.json"):
-        path = models_DIR / fname
+        path = MODELS_DIR / fname
         if path.exists():
             try:
                 data = json.loads(path.read_text())
@@ -163,7 +163,7 @@ def _load_v9_warmstart(horizon_h: int) -> dict:
 
 
 def _load_v9_baseline(horizon_h: int) -> dict:
-    path = models_DIR / "training_metrics_.json"
+    path = MODELS_DIR / "training_metrics.json"
     if not path.exists():
         return {}
     try:

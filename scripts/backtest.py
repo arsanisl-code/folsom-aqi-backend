@@ -253,7 +253,6 @@ def run_backtest():
         annual.append(
             {
                 "horizon_h": h,
-                "mae_": round(mae_, 2),
                 "mae_": round(mae_, 2) if not np.isnan(mae_) else None,
                 "delta_mae": round(delta, 2) if not np.isnan(delta) else None,
                 "r2_": round(r2_, 3),

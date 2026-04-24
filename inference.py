@@ -8,20 +8,17 @@ the named sub-functions below, each with a single responsibility.
 """
 
 import json
-import os
 import time
-from datetime import datetime, timedelta
+from datetime import datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
 import joblib
 import numpy as np
-import pandas as pd
-import requests
 
 from ai_layer import generate_summary
 from data_fetcher import fetch_airnow_current, fetch_recent_combined
-from features import classify_regime, engineer_features
+from features import engineer_features
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -63,7 +60,7 @@ try:
          _m = Path("models/tournament_report.json") # Fallback to ensemble report
     if _m.exists():
         _METRICS = json.loads(_m.read_text())
-    
+
     for _h in [6, 12, 24, 48]:
         _f = Path(f"models/feature_names_{_h}h.json")
         if not _f.exists():
@@ -76,7 +73,7 @@ try:
         if _f.exists():
             names = json.loads(_f.read_text())
             _FEATURES = dict.fromkeys([6, 12, 24, 48], names)
-    
+
     _cs = Path("models/conformal_scales.json")
     if _cs.exists():
         _raw = json.loads(_cs.read_text())
@@ -117,12 +114,12 @@ def load_all_models() -> dict:
                 h_models['xgb'] = joblib.load(MODELS_DIR / f"xgb_{h}h.pkl")
                 h_models['lgbm_physics'] = joblib.load(MODELS_DIR / f"lgbm_physics_{h}h.pkl")
                 h_models['imputer'] = joblib.load(MODELS_DIR / f"imputer_{h}h.pkl")
-                
+
                 # Load physics feature list
                 phys_path = MODELS_DIR / f"physics_cols_{h}h.json"
                 if phys_path.exists():
                     h_models['phys_cols'] = json.loads(phys_path.read_text())
-                
+
                 all_models[h] = h_models
                 continue
 
@@ -165,7 +162,7 @@ def predict_now() -> dict:
     current_row = df.iloc[-1]
     current_aqi = int(round(current_row["us_aqi"]))
     current_cat, current_color = aqi_category(current_aqi)
-    
+
     # AirNow check for current station
     station_info = fetch_airnow_current()
     source_name = station_info.get("station", "AirNow (Folsom-Natoma)")
@@ -177,29 +174,29 @@ def predict_now() -> dict:
     for h in HORIZONS:
         if h not in models:
             continue
-            
+
         try:
             # Build features for this horizon
             X_full, _ = engineer_features(df, h)
             X_recent = X_full.tail(1)
-            
+
             # Align features with training
             feat_list = _FEATURES.get(h)
             if not feat_list:
                 log.warning(f"No feature list found for {h}h. Skipping.")
                 continue
-                
+
             X_final = X_recent.reindex(columns=feat_list, fill_value=0)
-            
+
             # Impute
             X_imputed = models[h]["imputer"].transform(X_final)
-            
+
             # Predict
             if 'meta' in models[h]:
                 # Ensemble Prediction
                 p_full = models[h]['lgbm_full'].predict(X_imputed)[0]
                 p_xgb = models[h]['xgb'].predict(X_imputed)[0]
-                
+
                 # Physics branch
                 phys_cols = models[h].get('phys_cols', [])
                 if phys_cols:
@@ -209,15 +206,15 @@ def predict_now() -> dict:
                     p_phys = models[h]['lgbm_physics'].predict(X_phys)[0]
                 else:
                     p_phys = p_full # fallback
-                
+
                 # Blend with Meta-learner
                 # Input to meta is [p_full, p_xgb, p_phys, 1.0]
                 meta_input = np.array([[p_full, p_xgb, p_phys, 1.0]])
                 residual = models[h]['meta'].predict(meta_input)[0]
                 point_pred = current_aqi + residual
-                
-                # Note: For ensemble, we still use legacy point/q05 files for intervals 
-                # unless we retrain ensemble with quantiles. 
+
+                # Note: For ensemble, we still use legacy point/q05 files for intervals
+                # unless we retrain ensemble with quantiles.
                 # For now, fallback to lgbm_point intervals if available.
                 try:
                     q05_raw = joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl").predict(X_imputed)[0]
@@ -225,7 +222,7 @@ def predict_now() -> dict:
                     # Convert residuals to absolute
                     q05_abs = current_aqi + q05_raw
                     q95_abs = current_aqi + q95_raw
-                except:
+                except Exception:
                     # Generic 15% interval
                     q05_abs = point_pred * 0.85
                     q95_abs = point_pred * 1.15
@@ -239,11 +236,11 @@ def predict_now() -> dict:
             # 4. Conformal Calibration (Season-Aware)
             # scale = scale_factor from conformal_scales.json
             scale = _CONFORMAL_SCALES.get(h, 1.0)
-            
+
             # Center the interval on point prediction
             half_width = abs(q95_abs - q05_abs) / 2.0
             calibrated_half_width = half_width * scale
-            
+
             ci_lo = int(round(np.clip(point_pred - calibrated_half_width, 0, 500)))
             ci_hi = int(round(np.clip(point_pred + calibrated_half_width, 0, 500)))
             point_final = int(round(np.clip(point_pred, 0, 500)))
@@ -295,7 +292,7 @@ def predict_now() -> dict:
 
     # Save to cache
     CACHE_FILE.write_text(json.dumps(output, indent=2, default=str))
-    
+
     elapsed = time.time() - start_time
     log.info(f"Inference complete in {elapsed:.2f}s")
     return output
@@ -306,7 +303,7 @@ def load_cached_forecast() -> dict:
     if CACHE_FILE.exists():
         try:
             return json.loads(CACHE_FILE.read_text())
-        except:
+        except Exception:
             return {}
     return {}
 
