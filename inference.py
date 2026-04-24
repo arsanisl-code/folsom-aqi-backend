@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 import joblib
 import numpy as np
+import requests
 
 from ai_layer import generate_summary
 from data_fetcher import fetch_airnow_current, fetch_recent_combined
@@ -298,8 +299,23 @@ def predict_now() -> dict:
     return output
 
 
-def load_cached_forecast() -> dict:
-    """Return the last saved forecast from disk if valid."""
+def load_cached_forecast(prefer_remote: bool = False) -> dict:
+    """
+    Return the cached forecast JSON.
+    If prefer_remote=True, attempts to fetch from the GitHub CDN (data-cache branch).
+    This is used by the Render API to bypass local rate limits.
+    """
+    if prefer_remote:
+        # Folsom AQI Navigator CDN URL (data-cache branch)
+        url = "https://raw.githubusercontent.com/arsanisl-code/folsom-aqi-backend/data-cache/latest.json"
+        try:
+            resp = requests.get(url, timeout=5)
+            if resp.status_code == 200:
+                return resp.json()
+        except Exception as e:
+            log.warning(f"Failed to fetch remote cache: {e}")
+            # Fall through to local cache
+
     if CACHE_FILE.exists():
         try:
             return json.loads(CACHE_FILE.read_text())
