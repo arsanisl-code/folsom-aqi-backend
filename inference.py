@@ -208,7 +208,8 @@ def predict_now() -> dict:
             X_final = X_recent.reindex(columns=feat_list, fill_value=0)
 
             # Impute
-            X_imputed = models[h]["imputer"].transform(X_final)
+            imputed_arr = models[h]["imputer"].transform(X_final)
+            X_imputed = pd.DataFrame(imputed_arr, columns=feat_list)
 
             # Predict
             if 'meta' in models[h]:
@@ -219,9 +220,7 @@ def predict_now() -> dict:
                 # Physics branch
                 phys_cols = models[h].get('phys_cols', [])
                 if phys_cols:
-                    # Map indices
-                    phys_indices = [feat_list.index(c) for c in phys_cols if c in feat_list]
-                    X_phys = X_imputed[:, phys_indices]
+                    X_phys = X_imputed[phys_cols]
                     p_phys = models[h]['lgbm_physics'].predict(X_phys)[0]
                 else:
                     p_phys = p_full # fallback

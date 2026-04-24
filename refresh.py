@@ -23,7 +23,8 @@ log = get_logger(__name__)
 
 class _NNLSMeta:
     """Dummy class for joblib unpickling in the __main__ context."""
-    pass
+    def predict(self, X): return self.predict_normalized(X)
+    def predict_normalized(self, X): return X @ self.coef_ + self.bias_
 
 
 def main():
