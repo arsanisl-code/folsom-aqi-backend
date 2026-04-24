@@ -19,9 +19,9 @@ import numpy as np
 import pandas as pd
 import requests
 
-from data_fetcher import fetch_recent_combined, fetch_airnow_current
-from features_v6 import engineer_features, classify_regime
 from ai_layer import generate_summary
+from data_fetcher import fetch_airnow_current, fetch_recent_combined
+from features_v6 import classify_regime, engineer_features
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -29,7 +29,7 @@ log = get_logger(__name__)
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 MODEL_VERSION = "Folsom-AQI-Lagrangian"
-CACHE_FILE    = Path("data/latest.json")
+CACHE_FILE = Path("data/latest.json")
 
 # Open-Meteo hallucination floor for relative humidity (Folsom grid cell artifact).
 # Guards against documented cases where the API returns 5–6% RH for Folsom,
@@ -42,25 +42,25 @@ HUMIDITY_FLOOR_PCT: float = 25.0
 WIND_SPEED_CAP_KMH: float = 25.0
 
 MODELS_DIR = Path("models_v6")
-DATA_DIR   = Path("data")
-HORIZONS   = [6, 12, 24, 48]
-TZ         = ZoneInfo("America/Los_Angeles")
+DATA_DIR = Path("data")
+HORIZONS = [6, 12, 24, 48]
+TZ = ZoneInfo("America/Los_Angeles")
 
 AQI_CATEGORIES = [
-    (0,   50,  "Good",                           "#00e400"),
-    (51,  100, "Moderate",                       "#ffff00"),
-    (101, 150, "Unhealthy for Sensitive Groups",  "#ff7e00"),
-    (151, 200, "Unhealthy",                      "#ff0000"),
-    (201, 300, "Very Unhealthy",                 "#8f3f97"),
-    (301, 500, "Hazardous",                      "#7e0023"),
+    (0, 50, "Good", "#00e400"),
+    (51, 100, "Moderate", "#ffff00"),
+    (101, 150, "Unhealthy for Sensitive Groups", "#ff7e00"),
+    (151, 200, "Unhealthy", "#ff0000"),
+    (201, 300, "Very Unhealthy", "#8f3f97"),
+    (301, 500, "Hazardous", "#7e0023"),
 ]
 
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
 # ── V13 Model Metadata (loaded once at import) ────────────────────────────────
 _V6_METRICS: dict = {}
-_V6_FEATURES: dict = {}   # keyed by horizon_h
-_CONFORMAL_SCALES: dict[int, float] = {}   # keyed by horizon_h; 0.0 = no correction
+_V6_FEATURES: dict = {}  # keyed by horizon_h
+_CONFORMAL_SCALES: dict[int, float] = {}  # keyed by horizon_h; 0.0 = no correction
 try:
     _m = Path("models_v6/training_metrics_v6.json")
     if _m.exists():
@@ -75,7 +75,7 @@ try:
         _f = Path("models_v6/feature_names_v6.json")
         if _f.exists():
             names = json.loads(_f.read_text())
-            _V6_FEATURES = {h: names for h in [6, 12, 24, 48]}
+            _V6_FEATURES = dict.fromkeys([6, 12, 24, 48], names)
     # V14: conformal calibration scales
     _cs = Path("models_v6/conformal_scales.json")
     if _cs.exists():
@@ -87,6 +87,7 @@ except Exception:
 
 # ─── AQI helpers ──────────────────────────────────────────────────────────────
 
+
 def aqi_category(aqi: int) -> tuple[str, str]:
     """Return (category_name, color_hex) for a given AQI integer."""
     for lo, hi, name, color in AQI_CATEGORIES:
@@ -97,14 +98,12 @@ def aqi_category(aqi: int) -> tuple[str, str]:
 
 def _iso(dt) -> str:
     """Convert a pandas Timestamp or datetime to ISO 8601 with timezone offset."""
-    if hasattr(dt, 'isoformat'):
+    if hasattr(dt, "isoformat"):
         return dt.isoformat()
     return str(dt)
 
 
-def _extract_scalar_handling_dst_duplicates(
-    df: pd.DataFrame, ts, col: str = "us_aqi"
-) -> float:
+def _extract_scalar_handling_dst_duplicates(df: pd.DataFrame, ts, col: str = "us_aqi") -> float:
     """
     Safely extract a scalar value from df at timestamp ts.
 
@@ -130,15 +129,15 @@ def _get_model_metadata() -> dict:
     features_6h = _V6_FEATURES.get(6, [])
     features_48h = _V6_FEATURES.get(48, [])
     return {
-        "architecture":   MODEL_VERSION,
+        "architecture": MODEL_VERSION,
         "total_features": {
-            "6h":  len(features_6h),
+            "6h": len(features_6h),
             "12h": len(_V6_FEATURES.get(12, features_6h)),
             "24h": len(_V6_FEATURES.get(24, features_48h)),
             "48h": len(features_48h),
         },
-        "horizons":       _V6_METRICS.get("horizons", []),
-        "feature_names":  features_6h,
+        "horizons": _V6_METRICS.get("horizons", []),
+        "feature_names": features_6h,
         "primary_drivers": [
             "aqi_current",
             "aqi_roll_24h_mean",
@@ -171,15 +170,13 @@ def load_all_models() -> dict:
         if not (MODELS_DIR / f"lgbm_{kind}_{h}h.pkl").exists()
     ]
     if missing:
-        raise RuntimeError(
-            "Missing model files:\n" + "\n".join(missing) + "\nRun train.py first."
-        )
+        raise RuntimeError("Missing model files:\n" + "\n".join(missing) + "\nRun train.py first.")
 
     models = {
         h: {
             "point": joblib.load(MODELS_DIR / f"lgbm_point_{h}h.pkl"),
-            "q05":   joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl"),
-            "q95":   joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl"),
+            "q05": joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl"),
+            "q95": joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl"),
         }
         for h in HORIZONS
     }
@@ -188,6 +185,7 @@ def load_all_models() -> dict:
 
 
 # ─── Inference sub-functions ──────────────────────────────────────────────────
+
 
 def _fetch_input_data(past_hours: int = 168) -> tuple[pd.DataFrame, int]:
     """
@@ -225,31 +223,32 @@ def _resolve_current_conditions(
     """
     if airnow and airnow.get("aqi", 0) > 0:
         current_aqi = int(airnow["aqi"])
-        cat, color  = aqi_category(current_aqi)
+        cat, color = aqi_category(current_aqi)
         return {
-            "aqi":               current_aqi,
-            "category":          cat,
-            "color":             color,
+            "aqi": current_aqi,
+            "category": cat,
+            "color": color,
             "primary_pollutant": airnow.get("primary_pollutant", "PM2.5"),
-            "source":            "AirNow",
-            "timestamp":         airnow.get("timestamp", datetime.now(tz=TZ).isoformat()),
+            "source": "AirNow",
+            "timestamp": airnow.get("timestamp", datetime.now(tz=TZ).isoformat()),
         }
 
     # Fallback: use the most recent Open-Meteo reading
     now = pd.Timestamp.now(tz=TZ)
-    past_df    = df[df.index <= now]
+    past_df = df[df.index <= now]
     recent_aqi = past_df["us_aqi"].dropna()
 
     current_aqi = int(round(recent_aqi.iloc[-1])) if len(recent_aqi) > 0 else 0
-    cat, color  = aqi_category(current_aqi)
+    cat, color = aqi_category(current_aqi)
     return {
-        "aqi":               current_aqi,
-        "category":          cat,
-        "color":             color,
+        "aqi": current_aqi,
+        "category": cat,
+        "color": color,
         "primary_pollutant": "PM2.5",
-        "source":            "Open-Meteo",
-        "timestamp":         _iso(recent_aqi.index[-1]) if len(recent_aqi) > 0
-                             else datetime.now(tz=TZ).isoformat(),
+        "source": "Open-Meteo",
+        "timestamp": _iso(recent_aqi.index[-1])
+        if len(recent_aqi) > 0
+        else datetime.now(tz=TZ).isoformat(),
     }
 
 
@@ -273,8 +272,8 @@ def _prepare_horizon_dataframe(
 
     Returns a copy of df_base with calibration and clamping applied.
     """
-    df_h   = df_base.copy()
-    now_ts = pd.Timestamp.now(tz=TZ).floor('h')
+    df_h = df_base.copy()
+    now_ts = pd.Timestamp.now(tz=TZ).floor("h")
 
     if airnow:
         aq_val = float(airnow.get("aqi", 30))
@@ -282,19 +281,15 @@ def _prepare_horizon_dataframe(
             om_now = df_h.at[now_ts, "us_aqi"]
         else:
             past_om = df_h[df_h.index <= now_ts]["us_aqi"].dropna()
-            om_now  = past_om.iloc[-1] if len(past_om) > 0 else aq_val
+            om_now = past_om.iloc[-1] if len(past_om) > 0 else aq_val
 
         offset = aq_val - om_now
         df_h["us_aqi"] = (df_h["us_aqi"] + offset).clip(lower=0)
 
     if "relative_humidity_2m" in df_h.columns:
-        df_h["relative_humidity_2m"] = df_h["relative_humidity_2m"].clip(
-            lower=HUMIDITY_FLOOR_PCT
-        )
+        df_h["relative_humidity_2m"] = df_h["relative_humidity_2m"].clip(lower=HUMIDITY_FLOOR_PCT)
     if "wind_speed_10m" in df_h.columns:
-        df_h["wind_speed_10m"] = df_h["wind_speed_10m"].clip(
-            upper=WIND_SPEED_CAP_KMH
-        )
+        df_h["wind_speed_10m"] = df_h["wind_speed_10m"].clip(upper=WIND_SPEED_CAP_KMH)
 
     # Forward-fill gaps so today's rows have at least the latest known values
     for col in ["us_aqi", "pm2_5"]:
@@ -337,8 +332,8 @@ def _predict_single_horizon(
     On any exception, logs at ERROR with exc_info and returns a degraded entry
     (current_aqi, ci_lo=0, ci_hi=500) with the unchanged min_ci_width_aqi.
     """
-    m      = models[horizon_h]
-    now_ts = pd.Timestamp.now(tz=TZ).floor('h')
+    m = models[horizon_h]
+    now_ts = pd.Timestamp.now(tz=TZ).floor("h")
 
     try:
         X_inf, _ = engineer_features(df_h, horizon_h=horizon_h)
@@ -351,10 +346,10 @@ def _predict_single_horizon(
 
         # Comprehensive cleaning to prevent LightGBM dtype/NaN errors
         X_now = X_now.ffill()
-        X_now = X_now.apply(pd.to_numeric, errors='coerce')
+        X_now = X_now.apply(pd.to_numeric, errors="coerce")
 
         # Capture the current absolute baseline to invert the residual prediction
-        base_aqi_now = X_now['aqi_current'].values[0]
+        base_aqi_now = X_now["aqi_current"].values[0]
         if np.isnan(base_aqi_now):
             base_aqi_now = current_aqi
 
@@ -365,20 +360,20 @@ def _predict_single_horizon(
             curr_regime = int(val.iloc[0]) if isinstance(val, pd.Series) else int(val)
         else:
             curr_regime = int(regime_series.iloc[-1])
-        X_now['regime'] = pd.Categorical([curr_regime], categories=[0, 1, 2])
+        X_now["regime"] = pd.Categorical([curr_regime], categories=[0, 1, 2])
 
         def _select_model_features(model_obj, X_raw: pd.DataFrame) -> pd.DataFrame:
             # LightGBM handles NaN natively — pass raw columns without imputation.
             return X_raw[model_obj.feature_name_]
 
-        res_pt  = m["point"].predict(_select_model_features(m["point"], X_now))[0]
-        res_q05 = m["q05"].predict(_select_model_features(m["q05"],   X_now))[0]
-        res_q95 = m["q95"].predict(_select_model_features(m["q95"],   X_now))[0]
+        res_pt = m["point"].predict(_select_model_features(m["point"], X_now))[0]
+        res_q05 = m["q05"].predict(_select_model_features(m["q05"], X_now))[0]
+        res_q95 = m["q95"].predict(_select_model_features(m["q95"], X_now))[0]
 
         # Invert residual prediction back to absolute AQI
-        pred_point = res_pt  + base_aqi_now
-        pred_q05   = res_q05 + base_aqi_now
-        pred_q95   = res_q95 + base_aqi_now
+        pred_point = res_pt + base_aqi_now
+        pred_q05 = res_q05 + base_aqi_now
+        pred_q95 = res_q95 + base_aqi_now
 
         pred_point = max(0, min(500, round(pred_point)))
 
@@ -390,7 +385,7 @@ def _predict_single_horizon(
         # V15 Tier 2: Season-aware — separate q for summer (May-Sep) and winter.
         current_month = pd.Timestamp.now(tz=TZ).month
         is_summer = current_month in {5, 6, 7, 8, 9}
-        h_scales  = _CONFORMAL_SCALES.get(horizon_h, {})
+        h_scales = _CONFORMAL_SCALES.get(horizon_h, {})
         if isinstance(h_scales, dict):
             q_conformal = h_scales.get("summer" if is_summer else "winter", 0.0)
         else:
@@ -416,29 +411,27 @@ def _predict_single_horizon(
         pred_q05 = min(pred_q05, pred_point)
         pred_q95 = max(pred_q95, pred_point)
 
-        valid_at   = generated_at + timedelta(hours=horizon_h)
+        valid_at = generated_at + timedelta(hours=horizon_h)
         cat, color = aqi_category(int(pred_point))
 
         entry = {
-            "aqi":      int(pred_point),
-            "ci_lo":    int(pred_q05),
-            "ci_hi":    int(pred_q95),
+            "aqi": int(pred_point),
+            "ci_lo": int(pred_q05),
+            "ci_hi": int(pred_q95),
             "category": cat,
-            "color":    color,
+            "color": color,
             "valid_at": _iso(valid_at),
         }
         return entry, current_width
 
     except Exception as exc:
-        log.error(
-            "Prediction failed for %sh horizon: %s", horizon_h, exc, exc_info=True
-        )
+        log.error("Prediction failed for %sh horizon: %s", horizon_h, exc, exc_info=True)
         degraded_entry = {
-            "aqi":      current_aqi,
-            "ci_lo":    0,
-            "ci_hi":    500,
+            "aqi": current_aqi,
+            "ci_lo": 0,
+            "ci_hi": 500,
             "category": "Unknown",
-            "color":    "#cccccc",
+            "color": "#cccccc",
             "valid_at": _iso(generated_at + timedelta(hours=horizon_h)),
         }
         return degraded_entry, min_ci_width_aqi
@@ -461,20 +454,21 @@ def _assemble_forecast_result(
         "generated_at": _iso(generated_at),
         "location": {
             "name": "Folsom, CA",
-            "lat":  38.6780,
-            "lon":  -121.1761,
+            "lat": 38.6780,
+            "lon": -121.1761,
         },
-        "current":                current,
-        "forecasts":              forecasts,
-        "history_72h":            history,
-        "model_version":          MODEL_VERSION,
-        "model_metadata":         _get_model_metadata(),
+        "current": current,
+        "forecasts": forecasts,
+        "history_72h": history,
+        "model_version": MODEL_VERSION,
+        "model_metadata": _get_model_metadata(),
         "data_freshness_minutes": data_age_minutes,
-        "ai_summary":             "",  # populated by predict_now() after assembly
+        "ai_summary": "",  # populated by predict_now() after assembly
     }
 
 
 # ─── Orchestrator ─────────────────────────────────────────────────────────────
+
 
 def predict_now() -> dict:
     """
@@ -482,16 +476,16 @@ def predict_now() -> dict:
     Also writes the result to data/latest.json as the local cache.
     """
     generated_at = datetime.now(tz=TZ)
-    models       = load_all_models()
+    models = load_all_models()
 
     df, data_age_minutes = _fetch_input_data(past_hours=168)
     log.info("Fetching AirNow current reading...")
-    airnow  = fetch_airnow_current()
+    airnow = fetch_airnow_current()
     current = _resolve_current_conditions(df, airnow)
-    df_h    = _prepare_horizon_dataframe(df, airnow)
+    df_h = _prepare_horizon_dataframe(df, airnow)
 
-    forecasts         = {}
-    min_ci_width_aqi  = 0.0
+    forecasts = {}
+    min_ci_width_aqi = 0.0
     for horizon_h in HORIZONS:
         entry, min_ci_width_aqi = _predict_single_horizon(
             df_h, horizon_h, models, current["aqi"], min_ci_width_aqi, generated_at
@@ -499,9 +493,7 @@ def predict_now() -> dict:
         forecasts[f"{horizon_h}h"] = entry
 
     history = _build_history_72h(df, models)
-    result  = _assemble_forecast_result(
-        current, forecasts, history, data_age_minutes, generated_at
-    )
+    result = _assemble_forecast_result(current, forecasts, history, data_age_minutes, generated_at)
 
     log.info("Generating AI summary...")
     result["ai_summary"] = generate_summary(result)
@@ -513,12 +505,13 @@ def predict_now() -> dict:
 
 # ─── Supporting functions ─────────────────────────────────────────────────────
 
+
 def _compute_data_age_minutes(df: pd.DataFrame) -> int:
     """How many minutes old is the most recent row of data?"""
     try:
         latest = df.index.max()
-        now    = pd.Timestamp.now(tz=TZ)
-        delta  = now - latest
+        now = pd.Timestamp.now(tz=TZ)
+        delta = now - latest
         return max(0, int(delta.total_seconds() / 60))
     except Exception:
         return -1
@@ -536,21 +529,21 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
     the loop with 'truth value of a Series is ambiguous'.
     """
     history = []
-    now_ts  = pd.Timestamp.now(tz=TZ).floor('h')
-    cutoff  = now_ts - pd.Timedelta(hours=72)
+    now_ts = pd.Timestamp.now(tz=TZ).floor("h")
+    cutoff = now_ts - pd.Timedelta(hours=72)
 
     try:
         X_hist, _ = engineer_features(df, horizon_h=6)
-        m6        = models[6]
-        pt6       = m6["point"]
-        q05_6     = m6["q05"]
-        q95_6     = m6["q95"]
+        m6 = models[6]
+        pt6 = m6["point"]
+        q05_6 = m6["q05"]
+        q95_6 = m6["q95"]
 
         X_window = X_hist[(X_hist.index > cutoff) & (X_hist.index <= now_ts)].copy()
 
         if len(X_window) > 0:
             regime_series = classify_regime(df)
-            X_window['regime'] = pd.Categorical(
+            X_window["regime"] = pd.Categorical(
                 regime_series.reindex(X_window.index).fillna(2).astype(int),
                 categories=[0, 1, 2],
             )
@@ -558,52 +551,54 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
             def _hist_predict(model_obj, X_src: pd.DataFrame) -> np.ndarray:
                 return model_obj.predict(X_src[model_obj.feature_name_].copy())
 
-            preds = _hist_predict(pt6,  X_window) + X_window['aqi_current'].values
-            q05s  = _hist_predict(q05_6, X_window) + X_window['aqi_current'].values
-            q95s  = _hist_predict(q95_6, X_window) + X_window['aqi_current'].values
+            preds = _hist_predict(pt6, X_window) + X_window["aqi_current"].values
+            q05s = _hist_predict(q05_6, X_window) + X_window["aqi_current"].values
+            q95s = _hist_predict(q95_6, X_window) + X_window["aqi_current"].values
 
             preds = np.round(np.clip(preds, 0, 500)).astype(int)
-            q05s  = np.round(np.clip(q05s,  0, 500)).astype(int)
-            q95s  = np.round(np.clip(q95s,  0, 500)).astype(int)
+            q05s = np.round(np.clip(q05s, 0, 500)).astype(int)
+            q95s = np.round(np.clip(q95s, 0, 500)).astype(int)
 
             for i, ts in enumerate(X_window.index):
                 actual_raw = _extract_scalar_handling_dst_duplicates(df, ts, "us_aqi")
                 actual_val = int(round(actual_raw)) if not np.isnan(actual_raw) else None
-                history.append({
-                    "timestamp":    _iso(ts),
-                    "actual_aqi":   actual_val,
-                    "forecast_aqi": int(round(preds[i])),
-                    "ci_lo":        int(round(q05s[i])),
-                    "ci_hi":        int(round(q95s[i])),
-                })
+                history.append(
+                    {
+                        "timestamp": _iso(ts),
+                        "actual_aqi": actual_val,
+                        "forecast_aqi": int(round(preds[i])),
+                        "ci_lo": int(round(q05s[i])),
+                        "ci_hi": int(round(q95s[i])),
+                    }
+                )
 
     except Exception as exc:
         log.error("history_72h build failed: %s", exc, exc_info=True)
         hist_df = df[df.index > cutoff].copy()
         for ts, row in hist_df.iterrows():
             aqi = row.get("us_aqi", np.nan)
-            history.append({
-                "timestamp":    _iso(ts),
-                "actual_aqi":   int(round(float(aqi))) if not np.isnan(float(aqi)) else None,
-                "forecast_aqi": None,
-                "ci_lo":        None,
-                "ci_hi":        None,
-            })
+            history.append(
+                {
+                    "timestamp": _iso(ts),
+                    "actual_aqi": int(round(float(aqi))) if not np.isnan(float(aqi)) else None,
+                    "forecast_aqi": None,
+                    "ci_lo": None,
+                    "ci_hi": None,
+                }
+            )
 
     return history[-72:]
 
 
 # ─── CDN cache functions ──────────────────────────────────────────────────────
 
+
 def load_remote_forecast() -> dict | None:
     """Fetch the latest.json from the GitHub data-cache branch (the CDN)."""
     OWNER = "arsanisl-code"
-    REPO  = "folsom-aqi-backend"
-    URL   = (
-        f"https://api.github.com/repos/{OWNER}/{REPO}"
-        f"/contents/data/latest.json?ref=data-cache"
-    )
-    token   = os.getenv("GITHUB_TOKEN")
+    REPO = "folsom-aqi-backend"
+    URL = f"https://api.github.com/repos/{OWNER}/{REPO}/contents/data/latest.json?ref=data-cache"
+    token = os.getenv("GITHUB_TOKEN")
     headers = {"Accept": "application/vnd.github.v3.raw"}
     if token:
         headers["Authorization"] = f"token {token}"

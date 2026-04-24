@@ -1,0 +1,17 @@
+cff-version: 1.2.0
+message: "If you use this software in your research, please cite it as below."
+authors:
+  - family-names: "Rizk"
+    given-names: "Arsani"
+    orcid: "https://orcid.org/0000-0000-0000-0000"
+title: "Folsom AQI Backend - Physics-Informed Ensemble Forecasting"
+version: 1.0.0
+date-released: 2026-04-24
+url: "https://github.com/arsanisl-code/folsom-aqi-backend"
+repository-code: "https://github.com/arsanisl-code/folsom-aqi-backend"
+keywords:
+  - air quality
+  - machine learning
+  - ensemble forecasting
+  - atmospheric physics
+license: MIT

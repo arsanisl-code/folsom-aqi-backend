@@ -1,0 +1,817 @@
+[
+  {
+    "feature": "pm25_lag_24h",
+    "importance": 1459.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "ozone_current",
+    "importance": 1307.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_current",
+    "importance": 1226.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_roll_24h_mean",
+    "importance": 974.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "ozone_diff_3h",
+    "importance": 809.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "ozone_roll_6h_mean",
+    "importance": 798.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_lag_6h",
+    "importance": 796.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_current",
+    "importance": 702.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_3h_std",
+    "importance": 657.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "inversion_column_24h_mean",
+    "importance": 643.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "no2_roll_24h_mean",
+    "importance": 631.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "co_lag_24h",
+    "importance": 627.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "no2_current",
+    "importance": 612.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "momentum_accel_6h",
+    "importance": 610.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_aod",
+    "importance": 579.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_momentum_6h",
+    "importance": 579.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_ewma_6h",
+    "importance": 577.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_diff_1h",
+    "importance": 575.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "volatility_frontal",
+    "importance": 573.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_168h_mean",
+    "importance": 572.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_24h_std",
+    "importance": 570.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "temp_diff_24h",
+    "importance": 567.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_wind_speed_mean",
+    "importance": 566.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aod_roll_24h_mean",
+    "importance": 565.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "temp_diff_48h",
+    "importance": 564.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_12h_std",
+    "importance": 552.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_zscore_7d",
+    "importance": 550.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_6h_std",
+    "importance": 549.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "co_current",
+    "importance": 549.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_lag_48h",
+    "importance": 543.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "co_roll_24h_mean",
+    "importance": 543.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_48h_std",
+    "importance": 541.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_co_ratio",
+    "importance": 540.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pressure_diff_24h",
+    "importance": 539.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pressure_diff_48h",
+    "importance": 537.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "day_of_year_sin",
+    "importance": 527.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "co_diff_6h",
+    "importance": 525.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_diff_24h",
+    "importance": 519.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_inversion_lid_stability",
+    "importance": 517.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_168h_std",
+    "importance": 514.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pressure_diff_12h",
+    "importance": 502.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "z500_anomaly",
+    "importance": 500.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_momentum_24h",
+    "importance": 494.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_inversion_delta_850",
+    "importance": 489.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_inversion_column_depth",
+    "importance": 489.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_wind_speed",
+    "importance": 488.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "inversion_lid_stability",
+    "importance": 486.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "co_lag_6h",
+    "importance": 484.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_lag_3h",
+    "importance": 479.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_x_wind",
+    "importance": 479.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_lag_12h",
+    "importance": 477.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_humidity_mean",
+    "importance": 472.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_co_ratio_6h_mean",
+    "importance": 469.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pressure_diff_6h",
+    "importance": 456.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "wind_dir_cos",
+    "importance": 443.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "ghi_accum_12h",
+    "importance": 432.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_wind_dir_sin",
+    "importance": 426.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "trapping_power",
+    "importance": 425.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_pressure",
+    "importance": 424.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_wind_u",
+    "importance": 423.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_48h_mean",
+    "importance": 422.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "surface_pressure",
+    "importance": 418.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_wind_v",
+    "importance": 414.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_lag_24h",
+    "importance": 411.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "wind_dir_sin",
+    "importance": 407.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "hours_since_rain",
+    "importance": 401.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_wind_dir_cos",
+    "importance": 396.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "co_roll_6h_max",
+    "importance": 395.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aod_diff_6h",
+    "importance": 395.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "wind_u",
+    "importance": 394.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "inversion_delta_850",
+    "importance": 393.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "wind_speed_10m",
+    "importance": 392.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "inversion_delta_850_6h_mean",
+    "importance": 385.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pressure_diff_3h",
+    "importance": 370.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "day_of_year_cos",
+    "importance": 369.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_photochem_accum_12h",
+    "importance": 366.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_lag_1h",
+    "importance": 357.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "wind_v",
+    "importance": 350.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_humidity",
+    "importance": 348.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_temperature",
+    "importance": 346.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_hdwi",
+    "importance": 346.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "inversion_column_depth",
+    "importance": 345.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_acceleration",
+    "importance": 341.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "temperature_2m",
+    "importance": 335.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "dust_roll_24h_mean",
+    "importance": 334.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "regime0_x_trapping_power",
+    "importance": 331.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aod_diff_3h",
+    "importance": 330.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_24h_mean",
+    "importance": 327.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "pm25_roll_6h_mean",
+    "importance": 326.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_temperature_mean",
+    "importance": 323.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_lag_6h",
+    "importance": 312.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_pressure_mean",
+    "importance": 312.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aod_current",
+    "importance": 310.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_3h_mean",
+    "importance": 307.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "wildfire_hdwi",
+    "importance": 304.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_12h_mean",
+    "importance": 290.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "direct_radiation",
+    "importance": 281.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_168h_max",
+    "importance": 278.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_lag_1h",
+    "importance": 277.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_acceleration_6h_mean",
+    "importance": 271.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "vent_deficit_24h_mean",
+    "importance": 262.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "regime0_x_fwd_wind_mean",
+    "importance": 262.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_ewma_24h",
+    "importance": 261.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "photochem_forcing",
+    "importance": 257.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_6h_mean",
+    "importance": 255.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "precip_30d_sum",
+    "importance": 255.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "dew_point_depression",
+    "importance": 252.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "hour_cos",
+    "importance": 249.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "photochem_forcing_6h",
+    "importance": 246.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "relative_humidity_2m",
+    "importance": 245.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_lag_3h",
+    "importance": 242.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_lag_2h",
+    "importance": 231.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "blocking_persistence_72h",
+    "importance": 227.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "inversion_12h_max",
+    "importance": 226.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "hour_cos_2",
+    "importance": 218.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_48h_max",
+    "importance": 215.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "radiation_accum_6h",
+    "importance": 214.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "cold_degree_hours_48h",
+    "importance": 210.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "blh_collapse_rate",
+    "importance": 210.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_x_rad",
+    "importance": 208.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_ewma_6h",
+    "importance": 205.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_blh_collapse_rate",
+    "importance": 202.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "boundary_layer_height",
+    "importance": 193.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_24h_max",
+    "importance": 191.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "dow_sin",
+    "importance": 187.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "hour_sin_2",
+    "importance": 186.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_photochem_forcing",
+    "importance": 184.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "cloud_cover",
+    "importance": 178.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "hour_sin",
+    "importance": 177.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_ventilation",
+    "importance": 175.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "dow_cos",
+    "importance": 170.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "blh_x_wind_speed",
+    "importance": 164.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_12h_max",
+    "importance": 159.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fat_tail_persistence_48h",
+    "importance": 151.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_ventilation_stress",
+    "importance": 145.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_blh",
+    "importance": 138.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_6h_max",
+    "importance": 123.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "summer_photochem_accum",
+    "importance": 121.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fog_precursor_12h",
+    "importance": 103.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aqi_roll_3h_max",
+    "importance": 98.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "dust_diff_6h",
+    "importance": 97.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "inversion_strength",
+    "importance": 90.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "stability_index",
+    "importance": 82.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "dust_current",
+    "importance": 66.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_precip_accum",
+    "importance": 65.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "stagnation_48h",
+    "importance": 63.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "stagnation_24h",
+    "importance": 48.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "month_sin",
+    "importance": 47.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_vent_deficit",
+    "importance": 38.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aod_persistence_24h",
+    "importance": 37.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "month_cos",
+    "importance": 34.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "vent_deficit",
+    "importance": 32.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "future_hour_sin",
+    "importance": 30.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "aod_trend_6h",
+    "importance": 24.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "future_hour_cos",
+    "importance": 23.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "fwd_precipitation",
+    "importance": 22.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "days_since_rain",
+    "importance": 21.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "cold_degree_hours",
+    "importance": 10.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "precipitation",
+    "importance": 9.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "day_of_week_sin",
+    "importance": 9.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "day_of_week_cos",
+    "importance": 9.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "regime1_x_aqi_current",
+    "importance": 3.0,
+    "is_trajectory": false
+  },
+  {
+    "feature": "regime1_x_aqi_roll_24h_mean",
+    "importance": 2.0,
+    "is_trajectory": false
+  }
+]

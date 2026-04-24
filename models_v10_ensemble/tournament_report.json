@@ -1,0 +1,299 @@
+{
+  "generated_at": "2026-04-19T13:29:30.956983",
+  "architecture": "V11 Feature-Diversity Ensemble (LGBM-Full + XGB + LGBM-Physics + NNLS-Bias)",
+  "meta_learner": "NNLS(scipy) with bias column, weights normalized to sum=1",
+  "validation": "TimeSeriesSplit(n_splits=5, gap=horizon_h)",
+  "hpo_budget": {
+    "lgbm_full": 50,
+    "xgb": 75,
+    "lgbm_physics": 75
+  },
+  "n_jobs": 14,
+  "optuna_db": "sqlite:///optuna_ensemble.db",
+  "base_models": [
+    "LGBM-Full (regression_l1, all 173 features)",
+    "XGBoost (reg:absoluteerror, all 173 features)",
+    "LGBM-Physics (regression_l1, ~40 physics-only features, zero AQI lags)"
+  ],
+  "physics_features": [
+    "boundary_layer_height",
+    "fwd_blh",
+    "blh_collapse_rate",
+    "fwd_blh_collapse_rate",
+    "wind_speed_10m",
+    "wind_dir_sin",
+    "wind_dir_cos",
+    "wind_u",
+    "wind_v",
+    "fwd_wind_speed",
+    "fwd_wind_speed_mean",
+    "fwd_wind_dir_sin",
+    "fwd_wind_dir_cos",
+    "fwd_wind_u",
+    "fwd_wind_v",
+    "temperature_2m",
+    "relative_humidity_2m",
+    "surface_pressure",
+    "fwd_temperature",
+    "fwd_humidity",
+    "fwd_pressure",
+    "fwd_temperature_mean",
+    "fwd_humidity_mean",
+    "fwd_pressure_mean",
+    "fwd_ventilation",
+    "fwd_vent_deficit",
+    "vent_deficit",
+    "vent_deficit_24h_mean",
+    "inversion_strength",
+    "inversion_12h_max",
+    "stagnation_6h",
+    "stagnation_24h",
+    "stagnation_48h",
+    "fwd_hdwi",
+    "wildfire_hdwi",
+    "precipitation",
+    "fwd_precipitation",
+    "fwd_precip_accum",
+    "hour_sin",
+    "hour_cos",
+    "future_hour_sin",
+    "future_hour_cos",
+    "day_of_year_sin",
+    "day_of_year_cos",
+    "month_sin",
+    "month_cos"
+  ],
+  "total_run_s": 993.51,
+  "horizons": [
+    {
+      "horizon_h": 6,
+      "horizon_wall_s": 1356.94,
+      "baseline_lgbm_v9": {
+        "mae": 2.49,
+        "r2": 0.914
+      },
+      "lgbm_full_v11": {
+        "mae": 2.687,
+        "r2": 0.884
+      },
+      "xgb_v11": {
+        "mae": 2.722,
+        "r2": 0.8743
+      },
+      "lgbm_physics_v11": {
+        "mae": 5.005,
+        "r2": 0.629
+      },
+      "ensemble_v11": {
+        "mae": 2.767,
+        "r2": 0.8748
+      },
+      "meta_coefficients": {
+        "lgbm_full": 0.376,
+        "xgb": 0.538,
+        "lgbm_physics": 0.0859,
+        "bias": 0.0,
+        "sum": 1.0
+      },
+      "oof_diversity": {
+        "lgbm_full_xgb_corr": 0.997,
+        "lgbm_full_physics_corr": 0.8137,
+        "xgb_physics_corr": 0.8153
+      },
+      "physics_features_used": 46,
+      "hpo_params": {
+        "lgbm_full": {
+          "learning_rate": 0.022003388130410535,
+          "num_leaves": 92,
+          "max_depth": 12,
+          "min_child_samples": 56,
+          "feature_fraction": 0.8751125574978215,
+          "bagging_fraction": 0.8405229031317443,
+          "reg_alpha": 0.1490463400688294,
+          "reg_lambda": 0.8936636094601745,
+          "path_smooth": 1.244686310381993,
+          "min_split_gain": 0.1543364443360338
+        },
+        "xgb": {
+          "eta": 0.017215740360912033,
+          "max_depth": 8,
+          "subsample": 0.669347258308109,
+          "colsample_bytree": 0.8873825704331071,
+          "min_child_weight": 48,
+          "gamma": 4.412872639102341,
+          "reg_alpha": 0.0002553571249943513,
+          "reg_lambda": 0.09642189525141213,
+          "max_delta_step": 8
+        },
+        "lgbm_physics": {
+          "learning_rate": 0.01147767413764376,
+          "num_leaves": 47,
+          "max_depth": 8,
+          "min_child_samples": 10,
+          "feature_fraction": 0.6818407897411919,
+          "bagging_fraction": 0.5346614710317286,
+          "reg_alpha": 0.0009747289275194115,
+          "reg_lambda": 3.1840482530973824,
+          "path_smooth": 1.2820369628804063
+        }
+      },
+      "benchmark_9800x3d": {
+        "lgbm_full_hpo": {
+          "label": "LGBM-Full-6h",
+          "n_trials": 50,
+          "total_s": 426.27,
+          "mean_s": 8.5,
+          "median_s": 8.5,
+          "min_s": 3.67,
+          "max_s": 15.42,
+          "p95_s": 13.29,
+          "trials_per_min": 7.04
+        },
+        "xgb_hpo": {
+          "label": "XGB-6h",
+          "n_trials": 75,
+          "total_s": 791.66,
+          "mean_s": 10.55,
+          "median_s": 9.45,
+          "min_s": 3.36,
+          "max_s": 31.61,
+          "p95_s": 17.53,
+          "trials_per_min": 5.68
+        },
+        "lgbm_physics_hpo": {
+          "label": "LGBM-Physics-6h",
+          "n_trials": 75,
+          "total_s": 83.3,
+          "mean_s": 1.1,
+          "median_s": 0.94,
+          "min_s": 0.35,
+          "max_s": 2.74,
+          "p95_s": 2.0,
+          "trials_per_min": 54.02
+        },
+        "oof_generation_s": 33.44,
+        "final_build_s": {
+          "lgbm_full": 13.36,
+          "xgb": 7.69,
+          "lgbm_physics": 0.62
+        }
+      }
+    },
+    {
+      "horizon_h": 12,
+      "horizon_wall_s": 993.3,
+      "baseline_lgbm_v9": {
+        "mae": 4.39,
+        "r2": 0.788
+      },
+      "lgbm_full_v11": {
+        "mae": 4.645,
+        "r2": 0.7307
+      },
+      "xgb_v11": {
+        "mae": 4.705,
+        "r2": 0.7235
+      },
+      "lgbm_physics_v11": {
+        "mae": 7.469,
+        "r2": 0.3596
+      },
+      "ensemble_v11": {
+        "mae": 4.703,
+        "r2": 0.7276
+      },
+      "meta_coefficients": {
+        "lgbm_full": 0.3481,
+        "xgb": 0.6398,
+        "lgbm_physics": 0.0121,
+        "bias": 0.3313,
+        "sum": 1.0
+      },
+      "oof_diversity": {
+        "lgbm_full_xgb_corr": 0.9966,
+        "lgbm_full_physics_corr": 0.8671,
+        "xgb_physics_corr": 0.8626
+      },
+      "physics_features_used": 46,
+      "hpo_params": {
+        "lgbm_full": {
+          "learning_rate": 0.021020950080606428,
+          "num_leaves": 44,
+          "max_depth": 10,
+          "min_child_samples": 49,
+          "feature_fraction": 0.5881677911538412,
+          "bagging_fraction": 0.7856157861614388,
+          "reg_alpha": 0.0026010239655899227,
+          "reg_lambda": 0.07425064903556533,
+          "path_smooth": 0.4438053154799304,
+          "min_split_gain": 0.12905662232342283
+        },
+        "xgb": {
+          "eta": 0.012350357017204591,
+          "max_depth": 6,
+          "subsample": 0.5266326043162839,
+          "colsample_bytree": 0.7385008392494241,
+          "min_child_weight": 50,
+          "gamma": 2.864755554955053,
+          "reg_alpha": 0.16056615395974283,
+          "reg_lambda": 0.3620263178695453,
+          "max_delta_step": 3
+        },
+        "lgbm_physics": {
+          "learning_rate": 0.008190202007483272,
+          "num_leaves": 57,
+          "max_depth": 8,
+          "min_child_samples": 31,
+          "feature_fraction": 0.8521404944929096,
+          "bagging_fraction": 0.662184548183557,
+          "reg_alpha": 0.295827657084764,
+          "reg_lambda": 0.8603144737156885,
+          "path_smooth": 0.8015084752814614
+        }
+      },
+      "benchmark_9800x3d": {
+        "lgbm_full_hpo": {
+          "label": "LGBM-Full-12h",
+          "n_trials": 50,
+          "total_s": 252.28,
+          "mean_s": 5.03,
+          "median_s": 4.73,
+          "min_s": 1.9,
+          "max_s": 10.26,
+          "p95_s": 8.32,
+          "trials_per_min": 11.89
+        },
+        "xgb_hpo": {
+          "label": "XGB-12h",
+          "n_trials": 75,
+          "total_s": 620.65,
+          "mean_s": 8.27,
+          "median_s": 7.73,
+          "min_s": 2.65,
+          "max_s": 32.5,
+          "p95_s": 12.78,
+          "trials_per_min": 7.25
+        },
+        "lgbm_physics_hpo": {
+          "label": "LGBM-Physics-12h",
+          "n_trials": 75,
+          "total_s": 83.6,
+          "mean_s": 1.11,
+          "median_s": 1.04,
+          "min_s": 0.29,
+          "max_s": 2.82,
+          "p95_s": 2.2,
+          "trials_per_min": 53.83
+        },
+        "oof_generation_s": 26.67,
+        "final_build_s": {
+          "lgbm_full": 2.81,
+          "xgb": 5.76,
+          "lgbm_physics": 1.07
+        }
+      }
+    }
+  ],
+  "updated_at": "2026-04-19T13:52:52.044925",
+  "completed_at": "2026-04-19T13:52:52.103925"
+}

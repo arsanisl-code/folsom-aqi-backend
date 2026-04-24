@@ -26,18 +26,18 @@ def main():
     log.info("Starting at %s", start.isoformat())
 
     try:
-        result  = predict_now()
+        result = predict_now()
         elapsed = (datetime.now() - start).total_seconds()
         log.info("Success in %.1fs", elapsed)
-        log.info("Generated at: %s", result['generated_at'])
-        log.info("Data freshness: %s min", result['data_freshness_minutes'])
+        log.info("Generated at: %s", result["generated_at"])
+        log.info("Data freshness: %s min", result["data_freshness_minutes"])
         log.info(
             "Current AQI: %s (%s)",
-            result['current']['aqi'],
-            result['current']['category'],
+            result["current"]["aqi"],
+            result["current"]["category"],
         )
-        for h, fc in result['forecasts'].items():
-            log.info("  %s: %s AQI (%s)", h, fc['aqi'], fc['category'])
+        for h, fc in result["forecasts"].items():
+            log.info("  %s: %s AQI (%s)", h, fc["aqi"], fc["category"])
 
     except Exception as exc:
         elapsed = (datetime.now() - start).total_seconds()

@@ -42,6 +42,7 @@ KM_PER_DEG_LON: float = 111.32 * np.cos(np.radians(LAT_FOLSOM))
 
 # ─── Core trajectory feature builder ─────────────────────────────────────────
 
+
 def add_trajectory_features(
     X: pd.DataFrame,
     df: pd.DataFrame,
@@ -60,8 +61,8 @@ def add_trajectory_features(
     # Wind U/V transport components (m/s)
     # Meteorological convention: wind_dir = direction FROM which wind blows.
     # Negate to get the transport direction (where the parcel came FROM).
-    wind_speed   = pd.to_numeric(df["wind_speed_10m"],     errors="coerce").fillna(0.0).values
-    wind_dir     = pd.to_numeric(df["wind_direction_10m"], errors="coerce").fillna(0.0).values
+    wind_speed = pd.to_numeric(df["wind_speed_10m"], errors="coerce").fillna(0.0).values
+    wind_dir = pd.to_numeric(df["wind_direction_10m"], errors="coerce").fillna(0.0).values
     wind_dir_rad = np.radians(wind_dir)
 
     U = -wind_speed * np.sin(wind_dir_rad)  # eastward transport (m/s)

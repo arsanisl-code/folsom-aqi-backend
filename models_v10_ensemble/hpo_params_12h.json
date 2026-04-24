@@ -1,0 +1,36 @@
+{
+  "lgbm_full": {
+    "learning_rate": 0.021020950080606428,
+    "num_leaves": 44,
+    "max_depth": 10,
+    "min_child_samples": 49,
+    "feature_fraction": 0.5881677911538412,
+    "bagging_fraction": 0.7856157861614388,
+    "reg_alpha": 0.0026010239655899227,
+    "reg_lambda": 0.07425064903556533,
+    "path_smooth": 0.4438053154799304,
+    "min_split_gain": 0.12905662232342283
+  },
+  "xgb": {
+    "eta": 0.012350357017204591,
+    "max_depth": 6,
+    "subsample": 0.5266326043162839,
+    "colsample_bytree": 0.7385008392494241,
+    "min_child_weight": 50,
+    "gamma": 2.864755554955053,
+    "reg_alpha": 0.16056615395974283,
+    "reg_lambda": 0.3620263178695453,
+    "max_delta_step": 3
+  },
+  "lgbm_physics": {
+    "learning_rate": 0.008190202007483272,
+    "num_leaves": 57,
+    "max_depth": 8,
+    "min_child_samples": 31,
+    "feature_fraction": 0.8521404944929096,
+    "bagging_fraction": 0.662184548183557,
+    "reg_alpha": 0.295827657084764,
+    "reg_lambda": 0.8603144737156885,
+    "path_smooth": 0.8015084752814614
+  }
+}

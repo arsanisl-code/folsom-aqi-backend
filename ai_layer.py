@@ -17,8 +17,8 @@ on any API failure so the rest of the system stays up.
 
 import os
 
-import requests
 import google.generativeai as genai
+import requests
 
 from logger import get_logger
 
@@ -26,10 +26,9 @@ log = get_logger(__name__)
 
 # ─── Config ───────────────────────────────────────────────────────────────────
 
-GEMINI_MODEL    = "gemini-2.5-flash-lite"
+GEMINI_MODEL = "gemini-2.5-flash-lite"
 _GEMINI_REST_ENDPOINT = (
-    "https://generativelanguage.googleapis.com/v1/models/"
-    "gemini-2.0-flash:generateContent"
+    "https://generativelanguage.googleapis.com/v1/models/gemini-2.5-flash-lite:generateContent"
 )
 
 # How the AI presents itself and what it knows
@@ -75,6 +74,7 @@ atmospheric scientist who simplifies complex data for the Folsom public.
 
 # ─── Internal helpers ─────────────────────────────────────────────────────────
 
+
 def _get_model() -> genai.GenerativeModel:
     """Configure Gemini SDK and return a model instance. Raises if key is missing."""
     api_key = os.environ.get("GEMINI_API_KEY", "")
@@ -96,10 +96,10 @@ def _format_forecast_as_ai_context(forecast_data: dict) -> str:
     that the AI can reason over. Renamed from _build_context_block to express
     that this function formats data for AI prompt injection, not general display.
     """
-    current   = forecast_data.get("current", {})
+    current = forecast_data.get("current", {})
     forecasts = forecast_data.get("forecasts", {})
-    location  = forecast_data.get("location", {})
-    gen_at    = forecast_data.get("generated_at", "unknown")
+    location = forecast_data.get("location", {})
+    gen_at = forecast_data.get("generated_at", "unknown")
     freshness = forecast_data.get("data_freshness_minutes", "unknown")
 
     lines = [
@@ -126,6 +126,7 @@ def _format_forecast_as_ai_context(forecast_data: dict) -> str:
 
 # ─── Public API ───────────────────────────────────────────────────────────────
 
+
 def generate_summary(forecast_data: dict) -> str:
     """
     Generate a plain-English one-paragraph summary of the current AQI forecast.
@@ -135,9 +136,9 @@ def generate_summary(forecast_data: dict) -> str:
     this field is empty rather than showing an error.
     """
     try:
-        model   = _get_model()
+        model = _get_model()
         context = _format_forecast_as_ai_context(forecast_data)
-        prompt  = (
+        prompt = (
             "Using the forecast data below, write a single plain-English paragraph "
             "(3–4 sentences) summarizing current air quality in Folsom for local residents. "
             "Include: what the current AQI is and what it means in everyday terms, "
@@ -147,7 +148,7 @@ def generate_summary(forecast_data: dict) -> str:
             f"{context}"
         )
         response = model.generate_content(prompt)
-        summary  = response.text.strip()
+        summary = response.text.strip()
         log.info("Summary generated (%s chars)", len(summary))
         return summary
 
@@ -168,14 +169,13 @@ def answer_question(question: str, forecast_data: dict) -> str:
         return "Please type a question and I'll do my best to answer it."
 
     try:
-        model   = _get_model()
+        model = _get_model()
         context = _format_forecast_as_ai_context(forecast_data)
-        prompt  = (
-            f"Current forecast data for Folsom, CA:\n{context}\n\n"
-            f"User question: {question.strip()}"
+        prompt = (
+            f"Current forecast data for Folsom, CA:\n{context}\n\nUser question: {question.strip()}"
         )
         response = model.generate_content(prompt)
-        answer   = response.text.strip()
+        answer = response.text.strip()
         log.info("Question answered (%s chars)", len(answer))
         return answer
 
@@ -211,17 +211,16 @@ def answer_question_with_key(
 
     if not api_key:
         return (
-            "⚠️ GEMINI_API_KEY is not set. "
-            "Add it to Streamlit Cloud Secrets to enable AI responses."
+            "⚠️ GEMINI_API_KEY is not set. Add it to Streamlit Cloud Secrets to enable AI responses."
         )
 
     context = _format_forecast_as_ai_context(forecast_data)
-    prompt  = f"Current forecast data:\n{context}\n\nUser question: {question.strip()}"
+    prompt = f"Current forecast data:\n{context}\n\nUser question: {question.strip()}"
 
     payload = {
         "system_instruction": {"parts": [{"text": _SYSTEM_PROMPT}]},
-        "contents":           [{"parts": [{"text": prompt}]}],
-        "generationConfig":   {"temperature": 0.4, "maxOutputTokens": 400},
+        "contents": [{"parts": [{"text": prompt}]}],
+        "generationConfig": {"temperature": 0.4, "maxOutputTokens": 400},
     }
     try:
         resp = requests.post(
@@ -237,9 +236,11 @@ def answer_question_with_key(
                 return "The Navigator is busy right now. Please wait a moment and try again."
             if resp.status_code in (500, 503):
                 return "The AI service is temporarily unavailable. Please try again in a minute."
-            return f"The Navigator encountered an error (HTTP {resp.status_code}). Please try again."
+            return (
+                f"The Navigator encountered an error (HTTP {resp.status_code}). Please try again."
+            )
 
-        result     = resp.json()
+        result = resp.json()
         candidates = result.get("candidates", [])
         if not candidates:
             log.warning("Gemini REST returned no candidates: %s", result)

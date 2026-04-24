@@ -1,0 +1,521 @@
+{
+  "generated_at": "2026-04-20T14:30:50.684991",
+  "train_cutoff": "2024-12-31 23:59:59",
+  "holdout_year": 2025,
+  "annual": [
+    {
+      "horizon_h": 6,
+      "mae_v12": 2.81,
+      "mae_v6": 3.52,
+      "delta_mae": -0.71,
+      "r2_v12": 0.936,
+      "coverage": 95.2
+    },
+    {
+      "horizon_h": 12,
+      "mae_v12": 5.29,
+      "mae_v6": 5.37,
+      "delta_mae": -0.08,
+      "r2_v12": 0.767,
+      "coverage": 95.3
+    },
+    {
+      "horizon_h": 24,
+      "mae_v12": 7.12,
+      "mae_v6": 7.4,
+      "delta_mae": -0.28,
+      "r2_v12": 0.629,
+      "coverage": 96.7
+    },
+    {
+      "horizon_h": 48,
+      "mae_v12": 8.45,
+      "mae_v6": 8.53,
+      "delta_mae": -0.09,
+      "r2_v12": 0.515,
+      "coverage": 97.9
+    }
+  ],
+  "monthly": [
+    {
+      "horizon_h": 6,
+      "month": 1,
+      "month_name": "Jan",
+      "season": "winter",
+      "mae": 1.81,
+      "r2": 0.967,
+      "coverage": 97.4,
+      "n": 744
+    },
+    {
+      "horizon_h": 6,
+      "month": 2,
+      "month_name": "Feb",
+      "season": "winter",
+      "mae": 2.03,
+      "r2": 0.946,
+      "coverage": 96.1,
+      "n": 672
+    },
+    {
+      "horizon_h": 6,
+      "month": 3,
+      "month_name": "Mar",
+      "season": "winter",
+      "mae": 2.17,
+      "r2": 0.911,
+      "coverage": 96.1,
+      "n": 743
+    },
+    {
+      "horizon_h": 6,
+      "month": 4,
+      "month_name": "Apr",
+      "season": "winter",
+      "mae": 2.4,
+      "r2": 0.88,
+      "coverage": 97.9,
+      "n": 720
+    },
+    {
+      "horizon_h": 6,
+      "month": 5,
+      "month_name": "May",
+      "season": "summer",
+      "mae": 4.14,
+      "r2": 0.916,
+      "coverage": 91.5,
+      "n": 744
+    },
+    {
+      "horizon_h": 6,
+      "month": 6,
+      "month_name": "Jun",
+      "season": "summer",
+      "mae": 3.36,
+      "r2": 0.936,
+      "coverage": 94.9,
+      "n": 720
+    },
+    {
+      "horizon_h": 6,
+      "month": 7,
+      "month_name": "Jul",
+      "season": "summer",
+      "mae": 3.27,
+      "r2": 0.947,
+      "coverage": 95.2,
+      "n": 744
+    },
+    {
+      "horizon_h": 6,
+      "month": 8,
+      "month_name": "Aug",
+      "season": "summer",
+      "mae": 3.23,
+      "r2": 0.941,
+      "coverage": 95.4,
+      "n": 744
+    },
+    {
+      "horizon_h": 6,
+      "month": 9,
+      "month_name": "Sep",
+      "season": "summer",
+      "mae": 3.81,
+      "r2": 0.896,
+      "coverage": 94.3,
+      "n": 720
+    },
+    {
+      "horizon_h": 6,
+      "month": 10,
+      "month_name": "Oct",
+      "season": "winter",
+      "mae": 2.55,
+      "r2": 0.93,
+      "coverage": 95.8,
+      "n": 744
+    },
+    {
+      "horizon_h": 6,
+      "month": 11,
+      "month_name": "Nov",
+      "season": "winter",
+      "mae": 2.39,
+      "r2": 0.978,
+      "coverage": 93.5,
+      "n": 719
+    },
+    {
+      "horizon_h": 6,
+      "month": 12,
+      "month_name": "Dec",
+      "season": "winter",
+      "mae": 2.46,
+      "r2": 0.983,
+      "coverage": 94.6,
+      "n": 744
+    },
+    {
+      "horizon_h": 12,
+      "month": 1,
+      "month_name": "Jan",
+      "season": "winter",
+      "mae": 3.7,
+      "r2": 0.882,
+      "coverage": 96.8,
+      "n": 744
+    },
+    {
+      "horizon_h": 12,
+      "month": 2,
+      "month_name": "Feb",
+      "season": "winter",
+      "mae": 3.8,
+      "r2": 0.809,
+      "coverage": 96.0,
+      "n": 672
+    },
+    {
+      "horizon_h": 12,
+      "month": 3,
+      "month_name": "Mar",
+      "season": "winter",
+      "mae": 3.95,
+      "r2": 0.718,
+      "coverage": 96.2,
+      "n": 743
+    },
+    {
+      "horizon_h": 12,
+      "month": 4,
+      "month_name": "Apr",
+      "season": "winter",
+      "mae": 4.02,
+      "r2": 0.649,
+      "coverage": 98.1,
+      "n": 720
+    },
+    {
+      "horizon_h": 12,
+      "month": 5,
+      "month_name": "May",
+      "season": "summer",
+      "mae": 8.2,
+      "r2": 0.657,
+      "coverage": 88.4,
+      "n": 744
+    },
+    {
+      "horizon_h": 12,
+      "month": 6,
+      "month_name": "Jun",
+      "season": "summer",
+      "mae": 6.3,
+      "r2": 0.745,
+      "coverage": 94.7,
+      "n": 720
+    },
+    {
+      "horizon_h": 12,
+      "month": 7,
+      "month_name": "Jul",
+      "season": "summer",
+      "mae": 5.76,
+      "r2": 0.818,
+      "coverage": 97.0,
+      "n": 744
+    },
+    {
+      "horizon_h": 12,
+      "month": 8,
+      "month_name": "Aug",
+      "season": "summer",
+      "mae": 6.25,
+      "r2": 0.765,
+      "coverage": 96.4,
+      "n": 744
+    },
+    {
+      "horizon_h": 12,
+      "month": 9,
+      "month_name": "Sep",
+      "season": "summer",
+      "mae": 7.19,
+      "r2": 0.547,
+      "coverage": 95.7,
+      "n": 720
+    },
+    {
+      "horizon_h": 12,
+      "month": 10,
+      "month_name": "Oct",
+      "season": "winter",
+      "mae": 4.67,
+      "r2": 0.762,
+      "coverage": 96.2,
+      "n": 744
+    },
+    {
+      "horizon_h": 12,
+      "month": 11,
+      "month_name": "Nov",
+      "season": "winter",
+      "mae": 4.62,
+      "r2": 0.922,
+      "coverage": 93.2,
+      "n": 719
+    },
+    {
+      "horizon_h": 12,
+      "month": 12,
+      "month_name": "Dec",
+      "season": "winter",
+      "mae": 4.88,
+      "r2": 0.932,
+      "coverage": 94.9,
+      "n": 744
+    },
+    {
+      "horizon_h": 24,
+      "month": 1,
+      "month_name": "Jan",
+      "season": "winter",
+      "mae": 6.44,
+      "r2": 0.641,
+      "coverage": 98.5,
+      "n": 744
+    },
+    {
+      "horizon_h": 24,
+      "month": 2,
+      "month_name": "Feb",
+      "season": "winter",
+      "mae": 6.44,
+      "r2": 0.461,
+      "coverage": 94.6,
+      "n": 672
+    },
+    {
+      "horizon_h": 24,
+      "month": 3,
+      "month_name": "Mar",
+      "season": "winter",
+      "mae": 5.47,
+      "r2": 0.436,
+      "coverage": 96.2,
+      "n": 743
+    },
+    {
+      "horizon_h": 24,
+      "month": 4,
+      "month_name": "Apr",
+      "season": "winter",
+      "mae": 5.93,
+      "r2": 0.436,
+      "coverage": 99.9,
+      "n": 720
+    },
+    {
+      "horizon_h": 24,
+      "month": 5,
+      "month_name": "May",
+      "season": "summer",
+      "mae": 8.16,
+      "r2": 0.656,
+      "coverage": 96.9,
+      "n": 744
+    },
+    {
+      "horizon_h": 24,
+      "month": 6,
+      "month_name": "Jun",
+      "season": "summer",
+      "mae": 7.4,
+      "r2": 0.721,
+      "coverage": 99.2,
+      "n": 720
+    },
+    {
+      "horizon_h": 24,
+      "month": 7,
+      "month_name": "Jul",
+      "season": "summer",
+      "mae": 6.7,
+      "r2": 0.781,
+      "coverage": 97.0,
+      "n": 744
+    },
+    {
+      "horizon_h": 24,
+      "month": 8,
+      "month_name": "Aug",
+      "season": "summer",
+      "mae": 7.07,
+      "r2": 0.731,
+      "coverage": 99.6,
+      "n": 744
+    },
+    {
+      "horizon_h": 24,
+      "month": 9,
+      "month_name": "Sep",
+      "season": "summer",
+      "mae": 7.93,
+      "r2": 0.555,
+      "coverage": 96.7,
+      "n": 720
+    },
+    {
+      "horizon_h": 24,
+      "month": 10,
+      "month_name": "Oct",
+      "season": "winter",
+      "mae": 7.15,
+      "r2": 0.547,
+      "coverage": 95.2,
+      "n": 744
+    },
+    {
+      "horizon_h": 24,
+      "month": 11,
+      "month_name": "Nov",
+      "season": "winter",
+      "mae": 8.13,
+      "r2": 0.756,
+      "coverage": 93.6,
+      "n": 719
+    },
+    {
+      "horizon_h": 24,
+      "month": 12,
+      "month_name": "Dec",
+      "season": "winter",
+      "mae": 8.62,
+      "r2": 0.809,
+      "coverage": 93.3,
+      "n": 744
+    },
+    {
+      "horizon_h": 48,
+      "month": 1,
+      "month_name": "Jan",
+      "season": "winter",
+      "mae": 7.95,
+      "r2": 0.403,
+      "coverage": 97.8,
+      "n": 744
+    },
+    {
+      "horizon_h": 48,
+      "month": 2,
+      "month_name": "Feb",
+      "season": "winter",
+      "mae": 6.17,
+      "r2": 0.5,
+      "coverage": 97.9,
+      "n": 672
+    },
+    {
+      "horizon_h": 48,
+      "month": 3,
+      "month_name": "Mar",
+      "season": "winter",
+      "mae": 6.08,
+      "r2": 0.348,
+      "coverage": 99.9,
+      "n": 743
+    },
+    {
+      "horizon_h": 48,
+      "month": 4,
+      "month_name": "Apr",
+      "season": "winter",
+      "mae": 6.37,
+      "r2": 0.32,
+      "coverage": 99.6,
+      "n": 720
+    },
+    {
+      "horizon_h": 48,
+      "month": 5,
+      "month_name": "May",
+      "season": "summer",
+      "mae": 9.6,
+      "r2": 0.598,
+      "coverage": 96.8,
+      "n": 744
+    },
+    {
+      "horizon_h": 48,
+      "month": 6,
+      "month_name": "Jun",
+      "season": "summer",
+      "mae": 8.68,
+      "r2": 0.692,
+      "coverage": 100.0,
+      "n": 720
+    },
+    {
+      "horizon_h": 48,
+      "month": 7,
+      "month_name": "Jul",
+      "season": "summer",
+      "mae": 7.64,
+      "r2": 0.738,
+      "coverage": 98.8,
+      "n": 744
+    },
+    {
+      "horizon_h": 48,
+      "month": 8,
+      "month_name": "Aug",
+      "season": "summer",
+      "mae": 9.26,
+      "r2": 0.639,
+      "coverage": 98.8,
+      "n": 744
+    },
+    {
+      "horizon_h": 48,
+      "month": 9,
+      "month_name": "Sep",
+      "season": "summer",
+      "mae": 9.21,
+      "r2": 0.327,
+      "coverage": 96.7,
+      "n": 720
+    },
+    {
+      "horizon_h": 48,
+      "month": 10,
+      "month_name": "Oct",
+      "season": "winter",
+      "mae": 9.22,
+      "r2": 0.25,
+      "coverage": 96.2,
+      "n": 744
+    },
+    {
+      "horizon_h": 48,
+      "month": 11,
+      "month_name": "Nov",
+      "season": "winter",
+      "mae": 10.2,
+      "r2": 0.672,
+      "coverage": 96.2,
+      "n": 719
+    },
+    {
+      "horizon_h": 48,
+      "month": 12,
+      "month_name": "Dec",
+      "season": "winter",
+      "mae": 10.77,
+      "r2": 0.688,
+      "coverage": 96.0,
+      "n": 744
+    }
+  ]
+}

@@ -10,3 +10,6 @@ joblib==1.4.2
 pyarrow==18.1.0
 openpyxl==3.1.5
 google-generativeai==0.8.3
+scipy>=1.11.0
+xgboost>=2.0.0
+optuna>=3.0.0

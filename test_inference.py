@@ -49,6 +49,7 @@ def main():
     # Load models
     print("\nLoading models into memory...")
     from inference import load_all_models
+
     models = load_all_models()
     print(f"✓ Loaded models for horizons: {list(models.keys())}")
 
@@ -56,6 +57,7 @@ def main():
     print("\nFetching data and running inference...")
     print("(This calls Open-Meteo and AirNow APIs — needs internet access)\n")
     from inference import predict_now
+
     result = predict_now()
 
     # Print schema-compliant JSON
@@ -70,33 +72,24 @@ def main():
     print("=" * 60)
 
     checks = [
-        ("generated_at present",    bool(result.get("generated_at"))),
-        ("location.name correct",   result.get("location", {}).get("name") == "Folsom, CA"),
-        ("current.aqi is int",      isinstance(result.get("current", {}).get("aqi"), int)),
-        ("current.source present",  bool(result.get("current", {}).get("source"))),
-        ("forecast 6h present",     "6h" in result.get("forecasts", {})),
-        ("forecast 12h present",    "12h" in result.get("forecasts", {})),
-        ("forecast 24h present",    "24h" in result.get("forecasts", {})),
-        ("forecast 48h present",    "48h" in result.get("forecasts", {})),
-        ("history_72h is list",     isinstance(result.get("history_72h"), list)),
-        ("history_72h ≤ 72 items",  len(result.get("history_72h", [])) <= 72),
-        ("model_version present",   bool(result.get("model_version"))),
+        ("generated_at present", bool(result.get("generated_at"))),
+        ("location.name correct", result.get("location", {}).get("name") == "Folsom, CA"),
+        ("current.aqi is int", isinstance(result.get("current", {}).get("aqi"), int)),
+        ("current.source present", bool(result.get("current", {}).get("source"))),
+        ("forecast 6h present", "6h" in result.get("forecasts", {})),
+        ("forecast 12h present", "12h" in result.get("forecasts", {})),
+        ("forecast 24h present", "24h" in result.get("forecasts", {})),
+        ("forecast 48h present", "48h" in result.get("forecasts", {})),
+        ("history_72h is list", isinstance(result.get("history_72h"), list)),
+        ("history_72h ≤ 72 items", len(result.get("history_72h", [])) <= 72),
+        ("model_version present", bool(result.get("model_version"))),
     ]
 
     # Check CI bounds
     for h_key, fc in result.get("forecasts", {}).items():
-        checks.append((
-            f"{h_key} ci_lo ≤ aqi",
-            fc.get("ci_lo", 999) <= fc.get("aqi", 0)
-        ))
-        checks.append((
-            f"{h_key} aqi ≤ ci_hi",
-            fc.get("aqi", 999) <= fc.get("ci_hi", 0)
-        ))
-        checks.append((
-            f"{h_key} aqi in [0,500]",
-            0 <= fc.get("aqi", -1) <= 500
-        ))
+        checks.append((f"{h_key} ci_lo ≤ aqi", fc.get("ci_lo", 999) <= fc.get("aqi", 0)))
+        checks.append((f"{h_key} aqi ≤ ci_hi", fc.get("aqi", 999) <= fc.get("ci_hi", 0)))
+        checks.append((f"{h_key} aqi in [0,500]", 0 <= fc.get("aqi", -1) <= 500))
 
     all_passed = True
     for name, passed in checks:
@@ -106,11 +99,13 @@ def main():
             all_passed = False
 
     if all_passed:
-        print(f"\n✓ All checks passed. Inference pipeline is working correctly.")
+        print("\n✓ All checks passed. Inference pipeline is working correctly.")
         print(f"\nCurrent AQI: {result['current']['aqi']} — {result['current']['category']}")
         print(f"Source:      {result['current']['source']}")
-        for h_key, fc in result['forecasts'].items():
-            print(f"Forecast {h_key}: {fc['aqi']} AQI [{fc['ci_lo']}–{fc['ci_hi']}] — {fc['category']}")
+        for h_key, fc in result["forecasts"].items():
+            print(
+                f"Forecast {h_key}: {fc['aqi']} AQI [{fc['ci_lo']}–{fc['ci_hi']}] — {fc['category']}"
+            )
         print("\nNext: run uvicorn api:app --reload  and open http://localhost:8000/forecast")
     else:
         print("\n✗ Some checks failed. Review the output above.")

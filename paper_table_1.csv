@@ -1,0 +1,17 @@
+horizon,model,mae,r2,skill_score_pct
+6h,Persistence,10.61,0.077,
+6h,Climatology,18.16,-0.674,-71.2
+6h,V15 Ablated (no fire),2.8,0.95,73.6
+6h,V15 Full (ours),2.81,0.935,73.5
+12h,Persistence,14.3,-0.362,
+12h,Climatology,19.47,-0.92,-36.2
+12h,V15 Ablated (no fire),5.32,0.808,62.8
+12h,V15 Full (ours),5.37,0.764,62.4
+24h,Persistence,9.97,0.468,
+24h,Climatology,15.14,-0.176,-51.9
+24h,V15 Ablated (no fire),7.21,0.721,27.7
+24h,V15 Full (ours),7.2,0.626,27.8
+48h,Persistence,12.84,0.159,
+48h,Climatology,14.84,-0.14,-15.6
+48h,V15 Ablated (no fire),8.45,0.633,34.2
+48h,V15 Full (ours),8.5,0.513,33.8

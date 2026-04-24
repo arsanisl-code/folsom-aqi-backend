@@ -28,7 +28,7 @@ log = get_logger(__name__)
 # Must match the directory used by inference.py so training and inference
 # always load from the same model artifacts.
 MODELS_DIR = Path("models_v6")
-DATA_DIR   = Path("data")
+DATA_DIR = Path("data")
 MODELS_DIR.mkdir(parents=True, exist_ok=True)
 DATA_DIR.mkdir(parents=True, exist_ok=True)
 
@@ -78,6 +78,7 @@ _OPTUNA_PARAMS = _load_optuna_params()
 
 # ─── LightGBM hyperparameters ─────────────────────────────────────────────────
 
+
 def _point_params(horizon_h: int) -> dict:
     """
     Return point model hyperparameters for the given horizon.
@@ -89,20 +90,20 @@ def _point_params(horizon_h: int) -> dict:
     tuned = _get_optuna_best(horizon_h, "point")
     if tuned is not None:
         # Strip 'alpha' if it was saved from a Huber run — not valid for regression_l1
-        tuned_clean = {k: v for k, v in tuned.items() if k != 'alpha'}
+        tuned_clean = {k: v for k, v in tuned.items() if k != "alpha"}
         return {
-            'objective':    'regression_l1',
-            'n_estimators': 4000,
-            'n_jobs':       -1,
-            'verbosity':    -1,
-            'random_state': 42,
-            'bagging_freq': 1,
+            "objective": "regression_l1",
+            "n_estimators": 4000,
+            "n_jobs": -1,
+            "verbosity": -1,
+            "random_state": 42,
+            "bagging_freq": 1,
             **tuned_clean,
         }
 
     # ── Fallback: hardcoded defaults ──
     base = dict(
-        objective='regression_l1',
+        objective="regression_l1",
         n_estimators=4000,
         learning_rate=0.01,
         subsample=0.8,
@@ -114,18 +115,27 @@ def _point_params(horizon_h: int) -> dict:
     )
     if horizon_h <= 12:
         base.update(
-            num_leaves=63, max_depth=8, min_child_samples=20,
-            reg_alpha=0.1, reg_lambda=1.0,
+            num_leaves=63,
+            max_depth=8,
+            min_child_samples=20,
+            reg_alpha=0.1,
+            reg_lambda=1.0,
         )
     elif horizon_h <= 24:
         base.update(
-            num_leaves=63, max_depth=7, min_child_samples=40,
-            reg_alpha=1.0, reg_lambda=2.0,
+            num_leaves=63,
+            max_depth=7,
+            min_child_samples=40,
+            reg_alpha=1.0,
+            reg_lambda=2.0,
         )
     else:  # 48h — constrained: low signal-to-noise, simpler trees generalize better
         base.update(
-            num_leaves=31, max_depth=5, min_child_samples=60,
-            reg_alpha=2.0, reg_lambda=5.0,
+            num_leaves=31,
+            max_depth=5,
+            min_child_samples=60,
+            reg_alpha=2.0,
+            reg_lambda=5.0,
         )
     return base
 
@@ -144,20 +154,20 @@ def _quantile_params(alpha: float, horizon_h: int) -> dict:
     if tuned is not None:
         return {
             # Fixed params — never tuned
-            'objective':    'quantile',
-            'alpha':        alpha,        # 0.01 or 0.99, passed by caller
-            'n_estimators': 1500,
-            'n_jobs':       -1,
-            'verbosity':    -1,
-            'random_state': 42,
-            'bagging_freq': 1,
+            "objective": "quantile",
+            "alpha": alpha,  # 0.01 or 0.99, passed by caller
+            "n_estimators": 1500,
+            "n_jobs": -1,
+            "verbosity": -1,
+            "random_state": 42,
+            "bagging_freq": 1,
             # Tuned params from Optuna
             **tuned,
         }
 
     # ── Fallback: hardcoded defaults (original train.py logic) ──
     base = dict(
-        objective='quantile',
+        objective="quantile",
         alpha=alpha,
         n_estimators=1500,
         learning_rate=0.01,
@@ -176,6 +186,7 @@ def _quantile_params(alpha: float, horizon_h: int) -> dict:
 
 # ─── Training ─────────────────────────────────────────────────────────────────
 
+
 def train_horizon(
     df: pd.DataFrame,
     horizon_h: int,
@@ -193,10 +204,10 @@ def train_horizon(
 
     # 2. Temporal split — strictly chronological, no shuffle
     train_mask = X.index < val_cutoff
-    val_mask   = X.index >= val_cutoff
+    val_mask = X.index >= val_cutoff
 
     X_train, y_train = X[train_mask], y[train_mask]
-    X_val,   y_val   = X[val_mask],   y[val_mask]
+    X_val, y_val = X[val_mask], y[val_mask]
 
     log.info("  Train rows: %s  |  Val rows: %s", f"{len(X_train):,}", f"{len(X_val):,}")
 
@@ -204,16 +215,16 @@ def train_horizon(
         raise RuntimeError(f"Too few training rows ({len(X_train)}). Check data fetch.")
 
     # 3. Impute — fit on train only, apply to both
-    imputer = SimpleImputer(strategy='median')
+    imputer = SimpleImputer(strategy="median")
     X_train_imp = imputer.fit_transform(X_train)
-    X_val_imp   = imputer.transform(X_val)
+    X_val_imp = imputer.transform(X_val)
     imputer_path = MODELS_DIR / f"imputer_{horizon_h}h.pkl"
     joblib.dump(imputer, imputer_path)
     log.info("  Imputer saved → %s", imputer_path)
 
     # Wrap back as DataFrames WITH DatetimeIndex (needed for early stopping split)
     X_train_df = pd.DataFrame(X_train_imp, columns=X_train.columns, index=X_train.index)
-    X_val_df   = pd.DataFrame(X_val_imp,   columns=X_val.columns, index=X_val.index)
+    X_val_df = pd.DataFrame(X_val_imp, columns=X_val.columns, index=X_val.index)
 
     # ── Leakage-free early stopping ──────────────────────────────────────
     # CRITICAL: We must NOT use the final 60-day val set (which contains
@@ -231,9 +242,9 @@ def train_horizon(
     es_within = X_train_df.index >= es_cutoff
 
     X_fit_df = X_train_df[~es_within]
-    y_fit    = y_train[~es_within]
-    X_es_df  = X_train_df[es_within]
-    y_es     = y_train[es_within]
+    y_fit = y_train[~es_within]
+    X_es_df = X_train_df[es_within]
+    y_es = y_train[es_within]
 
     log.info("  Fit rows: %s  |  ES eval rows: %s", f"{len(X_fit_df):,}", f"{len(X_es_df):,}")
 
@@ -241,7 +252,8 @@ def train_horizon(
     log.info("  Training point model...")
     point_model = lgb.LGBMRegressor(**_point_params(horizon_h))
     point_model.fit(
-        X_fit_df, y_fit,
+        X_fit_df,
+        y_fit,
         eval_set=[(X_es_df, y_es)],
         callbacks=[lgb.log_evaluation(200), lgb.early_stopping(50, verbose=True)],
     )
@@ -256,14 +268,15 @@ def train_horizon(
     # wildfire/photochem months without resampling the time series.
     summer_mask = X_train_df.index.month.isin([5, 6, 7, 8, 9])
     sample_weights = np.where(summer_mask, 1.5, 1.0)
-    log.info("  Summer rows: %d (%.1f%%) — upweighted 1.5×",
-             summer_mask.sum(), 100 * summer_mask.mean())
+    log.info(
+        "  Summer rows: %d (%.1f%%) — upweighted 1.5×", summer_mask.sum(), 100 * summer_mask.mean()
+    )
 
     log.info("  Training lower quantile model (q005)...")
     q05_model = lgb.LGBMRegressor(**_quantile_params(0.005, horizon_h))
-    q05_model.fit(X_train_df, y_train,
-                  sample_weight=sample_weights,
-                  callbacks=[lgb.log_evaluation(200)])
+    q05_model.fit(
+        X_train_df, y_train, sample_weight=sample_weights, callbacks=[lgb.log_evaluation(200)]
+    )
     q05_path = MODELS_DIR / f"lgbm_q05_{horizon_h}h.pkl"
     joblib.dump(q05_model, q05_path)
     log.info("  Q005 model saved → %s", q05_path)
@@ -271,9 +284,9 @@ def train_horizon(
     # 4c. Upper quantile (99.5th percentile)
     log.info("  Training upper quantile model (q995)...")
     q95_model = lgb.LGBMRegressor(**_quantile_params(0.995, horizon_h))
-    q95_model.fit(X_train_df, y_train,
-                  sample_weight=sample_weights,
-                  callbacks=[lgb.log_evaluation(200)])
+    q95_model.fit(
+        X_train_df, y_train, sample_weight=sample_weights, callbacks=[lgb.log_evaluation(200)]
+    )
     q95_path = MODELS_DIR / f"lgbm_q95_{horizon_h}h.pkl"
     joblib.dump(q95_model, q95_path)
     log.info("  Q995 model saved → %s", q95_path)
@@ -281,26 +294,26 @@ def train_horizon(
     # 5. Validation metrics
     if len(X_val_df) > 0:
         val_point_res = point_model.predict(X_val_df)
-        val_q05_res   = q05_model.predict(X_val_df)
-        val_q95_res   = q95_model.predict(X_val_df)
+        val_q05_res = q05_model.predict(X_val_df)
+        val_q95_res = q95_model.predict(X_val_df)
 
         # Invert the target transformation: Predicted AQI = Residual + Current AQI
-        base_aqi  = X_val['aqi_current'].values
+        base_aqi = X_val["aqi_current"].values
         val_point = val_point_res + base_aqi
-        val_q05   = val_q05_res + base_aqi
-        val_q95   = val_q95_res + base_aqi
+        val_q05 = val_q05_res + base_aqi
+        val_q95 = val_q95_res + base_aqi
 
         # True y values must also be inverted back to absolute AQI rather than the residual delta
         y_val_abs = y_val.values + base_aqi
 
         # Clip
         val_point = np.clip(val_point, 0, 500)
-        val_q05   = np.clip(val_q05,   0, 500)
-        val_q95   = np.clip(val_q95,   0, 500)
+        val_q05 = np.clip(val_q05, 0, 500)
+        val_q95 = np.clip(val_q95, 0, 500)
 
-        mae      = mean_absolute_error(y_val_abs, val_point)
-        r2       = r2_score(y_val_abs, val_point)
-        covered  = np.mean((y_val_abs >= val_q05) & (y_val_abs <= val_q95))
+        mae = mean_absolute_error(y_val_abs, val_point)
+        r2 = r2_score(y_val_abs, val_point)
+        covered = np.mean((y_val_abs >= val_q05) & (y_val_abs <= val_q95))
         avg_width = np.mean(val_q95 - val_q05)
 
         log.info("  Val MAE:       %.2f AQI", mae)
@@ -310,11 +323,11 @@ def train_horizon(
 
         return (
             {
-                "horizon_h":    horizon_h,
-                "val_mae":      round(mae, 2),
-                "val_r2":       round(r2, 3),
+                "horizon_h": horizon_h,
+                "val_mae": round(mae, 2),
+                "val_r2": round(r2, 3),
                 "val_coverage": round(covered * 100, 1),
-                "avg_width":    round(avg_width, 1),
+                "avg_width": round(avg_width, 1),
             },
             point_model,
             list(X_train.columns),
@@ -322,13 +335,20 @@ def train_horizon(
     else:
         log.warning("  No validation data available.")
         return (
-            {"horizon_h": horizon_h, "val_mae": None, "val_r2": None, "val_coverage": None, "avg_width": None},
+            {
+                "horizon_h": horizon_h,
+                "val_mae": None,
+                "val_r2": None,
+                "val_coverage": None,
+                "avg_width": None,
+            },
             point_model,
             list(X_train.columns),
         )
 
 
 # ─── Main ─────────────────────────────────────────────────────────────────────
+
 
 def main():
     log.info("=" * 60)
@@ -345,10 +365,20 @@ def main():
     log.info("  Columns: %s", list(df.columns))
 
     # Check for required columns
-    required = ['us_aqi', 'pm2_5', 'boundary_layer_height', 'wind_speed_10m',
-                'surface_pressure', 'relative_humidity_2m', 'temperature_2m',
-                'precipitation', 'cloud_cover', 'wind_direction_10m',
-                'direct_radiation', 'soil_temperature_0_to_7cm']
+    required = [
+        "us_aqi",
+        "pm2_5",
+        "boundary_layer_height",
+        "wind_speed_10m",
+        "surface_pressure",
+        "relative_humidity_2m",
+        "temperature_2m",
+        "precipitation",
+        "cloud_cover",
+        "wind_direction_10m",
+        "direct_radiation",
+        "soil_temperature_0_to_7cm",
+    ]
     missing = [c for c in required if c not in df.columns]
     if missing:
         log.error("Missing required columns: %s", missing)
@@ -356,7 +386,7 @@ def main():
 
     # Validation cutoff: 60 days before today
     val_cutoff = datetime.now(tz=df.index.tz) - timedelta(days=60)
-    log.info("  Train/Val cutoff: %s", val_cutoff.strftime('%Y-%m-%d'))
+    log.info("  Train/Val cutoff: %s", val_cutoff.strftime("%Y-%m-%d"))
 
     # Step 2: Train models for each horizon
     log.info("Step 2: Training models for each horizon...")
@@ -374,12 +404,14 @@ def main():
     log.info("=" * 60)
     log.info("  TRAINING SUMMARY")
     log.info("=" * 60)
-    log.info("  %-10s %-12s %-10s %-12s %s", "Horizon", "Val MAE", "Val R²", "Coverage", "Avg Width")
+    log.info(
+        "  %-10s %-12s %-10s %-12s %s", "Horizon", "Val MAE", "Val R²", "Coverage", "Avg Width"
+    )
     for r in results:
-        mae = f"{r['val_mae']:.1f}" if r['val_mae'] is not None else "N/A"
-        r2  = f"{r['val_r2']:.3f}" if r['val_r2'] is not None else "N/A"
-        cov = f"{r['val_coverage']:.1f}%" if r['val_coverage'] is not None else "N/A"
-        wid = f"{r['avg_width']:.1f}" if r['avg_width'] is not None else "N/A"
+        mae = f"{r['val_mae']:.1f}" if r["val_mae"] is not None else "N/A"
+        r2 = f"{r['val_r2']:.3f}" if r["val_r2"] is not None else "N/A"
+        cov = f"{r['val_coverage']:.1f}%" if r["val_coverage"] is not None else "N/A"
+        wid = f"{r['avg_width']:.1f}" if r["avg_width"] is not None else "N/A"
         log.info("  %-10s %-12s %-10s %-12s %s", f"{r['horizon_h']}h", mae, r2, cov, wid)
 
     # Step 4: Save per-horizon feature names (V13: feature count differs by horizon)
@@ -388,20 +420,31 @@ def main():
         fn_path = MODELS_DIR / f"feature_names_{h}h.json"
         with open(fn_path, "w") as f:
             json.dump(feature_names_h, f, indent=2)
-        traj_count = sum(1 for n in feature_names_h if n.startswith("traj_") or n == "smoke_wind_alignment")
-        log.info("  Feature names %sh → %s  (%d features, %d trajectory)",
-                 h, fn_path, len(feature_names_h), traj_count)
+        traj_count = sum(
+            1 for n in feature_names_h if n.startswith("traj_") or n == "smoke_wind_alignment"
+        )
+        log.info(
+            "  Feature names %sh → %s  (%d features, %d trajectory)",
+            h,
+            fn_path,
+            len(feature_names_h),
+            traj_count,
+        )
 
     # V13 verification: confirm feature pruning
     n_12h = len(get_feature_names(12))
     n_48h = len(get_feature_names(48))
-    log.info("  Feature Pruning: 12h=%d features, 48h=%d features (Δ=%d trajectory cols)",
-             n_12h, n_48h, n_48h - n_12h)
+    log.info(
+        "  Feature Pruning: 12h=%d features, 48h=%d features (Δ=%d trajectory cols)",
+        n_12h,
+        n_48h,
+        n_48h - n_12h,
+    )
 
     # Step 5: Feature importance report per horizon (V13)
     for h in HORIZONS:
         model = point_models.get(h)
-        cols  = feature_cols.get(h)
+        cols = feature_cols.get(h)
         if model is None or cols is None:
             continue
         importances = model.feature_importances_
@@ -417,27 +460,37 @@ def main():
 
         # Verify no traj features in 6h/12h
         if h < 24:
-            traj_in_model = [f for f in cols if f.startswith("traj_") or f == "smoke_wind_alignment"]
+            traj_in_model = [
+                f for f in cols if f.startswith("traj_") or f == "smoke_wind_alignment"
+            ]
             if traj_in_model:
                 log.error("  VIOLATION: traj features found in %sh model: %s", h, traj_in_model)
             else:
                 log.info("  OK: no trajectory features in %sh model", h)
 
         fi_path = MODELS_DIR / f"feature_importance_{h}h.json"
-        fi_path.write_text(json.dumps(
-            [{"feature": f, "importance": float(i), "is_trajectory": f in traj_feats}
-             for f, i in fi],
-            indent=2
-        ))
+        fi_path.write_text(
+            json.dumps(
+                [
+                    {"feature": f, "importance": float(i), "is_trajectory": f in traj_feats}
+                    for f, i in fi
+                ],
+                indent=2,
+            )
+        )
         log.info("  Importance saved → %s", fi_path)
 
     # Save training metrics
     metrics_path = MODELS_DIR / "training_metrics_v6.json"
     with open(metrics_path, "w") as f:
-        json.dump({
-            "trained_at": datetime.now().isoformat(),
-            "horizons":   results,
-        }, f, indent=2)
+        json.dump(
+            {
+                "trained_at": datetime.now().isoformat(),
+                "horizons": results,
+            },
+            f,
+            indent=2,
+        )
     log.info("  Training metrics saved → %s", metrics_path)
 
     # V15 Tier 3: Optuna warm-start persistence.
@@ -449,11 +502,12 @@ def main():
         model = point_models.get(h)
         if model is None:
             continue
-        params = {k: v for k, v in model.get_params().items()
-                  if k not in ('objective', 'n_estimators', 'n_jobs', 'verbosity', 'random_state')}
-        warmstart_data[f"{h}h"] = {
-            "point": {"best_params": params, "source": "train.py"}
+        params = {
+            k: v
+            for k, v in model.get_params().items()
+            if k not in ("objective", "n_estimators", "n_jobs", "verbosity", "random_state")
         }
+        warmstart_data[f"{h}h"] = {"point": {"best_params": params, "source": "train.py"}}
     ws_path = MODELS_DIR / "best_optuna_params.json"
     with open(ws_path, "w") as f:
         json.dump(warmstart_data, f, indent=2)

@@ -6,8 +6,6 @@ Start with: uvicorn api:app --host 0.0.0.0 --port 8000
 """
 
 from contextlib import asynccontextmanager
-from datetime import datetime
-from pathlib import Path
 
 from dotenv import load_dotenv
 from fastapi import FastAPI, HTTPException
@@ -16,7 +14,7 @@ from fastapi.responses import JSONResponse
 
 load_dotenv()  # Load .env file (AIRNOW_API_KEY etc.)
 
-from inference import load_cached_forecast, cache_age_minutes
+from inference import cache_age_minutes, load_cached_forecast
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -35,6 +33,7 @@ _models_loaded: bool = False
 
 
 # ─── Lifespan ─────────────────────────────────────────────────────────────────
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -75,6 +74,7 @@ app.add_middleware(
 
 # ─── Endpoints ────────────────────────────────────────────────────────────────
 
+
 @app.get("/")
 async def root():
     """
@@ -84,7 +84,7 @@ async def root():
     return {
         "message": "Folsom AQI Forecast API is running.",
         "status_endpoint": "/health",
-        "doc_endpoint": "/docs"
+        "doc_endpoint": "/docs",
     }
 
 
@@ -102,12 +102,12 @@ async def health():
     age = cache_age_minutes()
 
     return {
-        "status":                  "ok",
-        "models_loaded":           _models_loaded,
-        "startup_time":            _startup_time,
-        "last_refresh":            last_refresh,
-        "cache_age_minutes":       age,
-        "data_stale":              age > STALE_FORECAST_THRESHOLD_MINUTES,
+        "status": "ok",
+        "models_loaded": _models_loaded,
+        "startup_time": _startup_time,
+        "last_refresh": last_refresh,
+        "cache_age_minutes": age,
+        "data_stale": age > STALE_FORECAST_THRESHOLD_MINUTES,
         "stale_threshold_minutes": STALE_FORECAST_THRESHOLD_MINUTES,
     }
 
@@ -121,7 +121,9 @@ async def get_forecast():
     """
     cached = load_cached_forecast(prefer_remote=True)
     if cached is None:
-        raise HTTPException(status_code=503, detail="No forecast data available from CDN or local cache.")
+        raise HTTPException(
+            status_code=503, detail="No forecast data available from CDN or local cache."
+        )
 
     return JSONResponse(content=cached)
 
@@ -138,9 +140,9 @@ async def trigger_refresh():
         if not result:
             raise RuntimeError("Could not fetch remote cache.")
         return {
-            "refreshed":      True,
-            "source":         "GitHub CDN (data-cache)",
-            "generated_at":   result.get("generated_at"),
+            "refreshed": True,
+            "source": "GitHub CDN (data-cache)",
+            "generated_at": result.get("generated_at"),
             "data_freshness": result.get("data_freshness_minutes"),
         }
     except Exception as exc:
@@ -158,9 +160,9 @@ async def get_current():
     if not cached:
         raise HTTPException(status_code=503, detail="No forecast data available yet.")
     return {
-        "current":      cached.get("current"),
+        "current": cached.get("current"),
         "generated_at": cached.get("generated_at"),
-        "location":     cached.get("location"),
+        "location": cached.get("location"),
     }
 
 
@@ -175,6 +177,6 @@ async def get_history():
     if not cached:
         raise HTTPException(status_code=503, detail="No forecast data available yet.")
     return {
-        "history_72h":  cached.get("history_72h", []),
+        "history_72h": cached.get("history_72h", []),
         "generated_at": cached.get("generated_at"),
     }
