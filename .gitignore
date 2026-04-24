@@ -1,22 +1,39 @@
-# .gitignore für Folsom AQI Backend
+# Folsom AQI Navigator - Professional .gitignore
 
 # 1. Private / Sensitive
 .env
+*.key
 
-# 2. Large Data Files (Keep repo under GitHub limits)
+# 2. Python Environment & Junk
+venv/
+env/
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.ipynb_checkpoints/
+
+# 3. Model Artifacts & Database
+*.db
+*.log
+catboost_info/
+
+# 4. Large Data & Local Caches (Keep repo focused)
 data/*.parquet
 data/*.csv
 data/cache/
 data/firms_archive/
 
-# 3. Python Junk
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-
-# 4. OS/IDE Junk
+# 5. OS/IDE Junk
 .vscode/
 .idea/
 .DS_Store
 Thumbs.db
+
+# 6. Internal AI Instructions (Antigravity/Kiro)
+.kiro/
+.kiro-rules.md
+master_code_context.txt
