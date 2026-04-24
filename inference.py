@@ -24,6 +24,24 @@ from logger import get_logger
 
 log = get_logger(__name__)
 
+
+class _NNLSMeta:
+    """
+    NNLS meta-learner with bias column and normalized weights.
+    Redefined here so joblib can unpickle the ensemble models.
+    """
+
+    def __init__(self):
+        self.coef_: np.ndarray = np.array([])
+        self.bias_: float = 0.0
+        self._raw_w: np.ndarray = np.array([])
+
+    def predict(self, X_oof: np.ndarray) -> np.ndarray:
+        return self.predict_normalized(X_oof)
+
+    def predict_normalized(self, X_oof: np.ndarray) -> np.ndarray:
+        return X_oof @ self.coef_ + self.bias_
+
 # ─── Constants ────────────────────────────────────────────────────────────────
 
 MODEL_VERSION = "Folsom-AQI-Lagrangian-Ensemble"
@@ -267,8 +285,7 @@ def predict_now() -> dict:
             "aqi": int(round(row["us_aqi"]))
         })
 
-    # 6. AI Summary
-    ai_summary = generate_summary(current_aqi, forecasts)
+    # 6. AI Summary - populated below after dict assembly
 
     # Calculate data freshness
     data_age = 0
@@ -296,9 +313,12 @@ def predict_now() -> dict:
         },
         "forecasts": forecasts,
         "history_72h": history,
-        "ai_summary": ai_summary,
+        "ai_summary": "",
         "model_version": MODEL_VERSION
     }
+
+    # 6. Generate AI summary
+    output["ai_summary"] = generate_summary(output)
 
     # Save to cache
     CACHE_FILE.write_text(json.dumps(output, indent=2, default=str))
