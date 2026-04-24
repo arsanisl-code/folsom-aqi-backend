@@ -227,8 +227,12 @@ def predict_now() -> dict:
                     p_phys = p_full # fallback
 
                 # Blend with Meta-learner
-                # Input to meta is [p_full, p_xgb, p_phys, 1.0]
-                meta_input = np.array([[p_full, p_xgb, p_phys, 1.0]])
+                # Input to meta is [res_full, res_xgb, res_phys]
+                res_full = p_full - current_aqi
+                res_xgb = p_xgb - current_aqi
+                res_phys = p_phys - current_aqi
+
+                meta_input = np.array([[res_full, res_xgb, res_phys]])
                 residual = models[h]['meta'].predict(meta_input)[0]
                 point_pred = current_aqi + residual
 

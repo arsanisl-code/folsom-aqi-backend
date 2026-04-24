@@ -1,6 +1,6 @@
 {
-  "generated_at": "2026-04-24T16:40:40.458393-07:00",
-  "data_freshness_minutes": -6139,
+  "generated_at": "2026-04-24T16:41:04.503006-07:00",
+  "data_freshness_minutes": -6138,
   "location": {
     "name": "Folsom, CA",
     "lat": 38.678,
@@ -11,9 +11,24 @@
     "category": "Moderate",
     "color": "#ffff00",
     "source": "AirNow (Folsom-Natoma)",
-    "timestamp": "2026-04-24T16:40:40.458393-07:00"
+    "timestamp": "2026-04-24T16:41:04.503006-07:00"
   },
-  "forecasts": {},
+  "forecasts": {
+    "6h": {
+      "aqi": 0,
+      "ci_lo": 0,
+      "ci_hi": 0,
+      "category": "Good",
+      "color": "#00e400"
+    },
+    "12h": {
+      "aqi": 0,
+      "ci_lo": 0,
+      "ci_hi": 0,
+      "category": "Good",
+      "color": "#00e400"
+    }
+  },
   "history_72h": [
     {
       "timestamp": "2026-04-26T00:00:00-07:00",
@@ -304,6 +319,6 @@
       "aqi": 54
     }
   ],
-  "ai_summary": "Current air quality in Folsom is rated as 'Moderate' with an AQI of 54, meaning the air is acceptable, but people who are unusually sensitive to air pollution may want to reduce prolonged time spent outdoors. Looking ahead, air quality is expected to gradually improve over the next 48 hours. For today, it's a good idea to consider limiting strenuous outdoor activities, especially if you are sensitive to air quality changes.",
+  "ai_summary": "Currently, the air quality in Folsom is rated as Moderate, with an AQI of 54. This means while the air is generally acceptable, individuals who are unusually sensitive to air pollution should consider limiting prolonged outdoor activities. Looking ahead, the forecast suggests conditions are expected to improve significantly over the next 12 hours, with air quality likely to become Good. For today, sensitive groups should be mindful of prolonged outdoor exertion, but general outdoor activity should be acceptable for most.",
   "model_version": "Folsom-AQI-Lagrangian-Ensemble"
 }
