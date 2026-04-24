@@ -270,9 +270,18 @@ def predict_now() -> dict:
     # 6. AI Summary
     ai_summary = generate_summary(current_aqi, forecasts)
 
+    # Calculate data freshness
+    data_age = 0
+    try:
+        latest_data_ts = df.index.max()
+        data_age = int((datetime.now(TZ) - latest_data_ts).total_seconds() / 60)
+    except Exception:
+        pass
+
     # 7. Final Payload
     output = {
         "generated_at": datetime.now(TZ).isoformat(),
+        "data_freshness_minutes": data_age,
         "location": {
             "name": "Folsom, CA",
             "lat": 38.6780,
