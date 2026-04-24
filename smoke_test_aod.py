@@ -1,5 +1,6 @@
 import requests
 
+
 def test_aod_logic():
     url = "https://air-quality-api.open-meteo.com/v1/air-quality"
     params = {
