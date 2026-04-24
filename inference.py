@@ -15,6 +15,7 @@ from zoneinfo import ZoneInfo
 
 import joblib
 import numpy as np
+import pandas as pd
 import requests
 
 from ai_layer import generate_summary
