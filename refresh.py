@@ -21,6 +21,11 @@ from logger import get_logger
 log = get_logger(__name__)
 
 
+class _NNLSMeta:
+    """Dummy class for joblib unpickling in the __main__ context."""
+    pass
+
+
 def main():
     start = datetime.now()
     log.info("Starting at %s", start.isoformat())
