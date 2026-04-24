@@ -297,14 +297,14 @@ def fetch_weather_history(start_date: str, end_date: str) -> pd.DataFrame:
     return df
 
 
-def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
+def fetch_recent_combined(past_hours: int = 168, forecast_days: int = 3) -> pd.DataFrame:
     """
     Fetch the last `past_hours` of AQ + weather data for inference.
     Returns merged AQ + weather DataFrame.
     """
     _ensure_cache_dir()
     past_days = max(1, (past_hours // 24) + 1)
-    tag = f"recent_combined_ph{past_hours}"
+    tag = f"recent_combined_ph{past_hours}_fd{forecast_days}"
     cache = _cache_key(tag)
 
     if _cache_is_fresh(cache):
@@ -316,7 +316,7 @@ def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
         "longitude": LON,
         "hourly": ",".join(AQ_VARS),
         "past_days": past_days,
-        "forecast_days": 3,
+        "forecast_days": forecast_days,
         "timezone": TZ,
     }
     wx_params = {
@@ -324,7 +324,7 @@ def fetch_recent_combined(past_hours: int = 168) -> pd.DataFrame:
         "longitude": LON,
         "hourly": ",".join(WEATHER_VARS),
         "past_days": past_days,
-        "forecast_days": 5,
+        "forecast_days": forecast_days,
         "timezone": TZ,
     }
     try:
