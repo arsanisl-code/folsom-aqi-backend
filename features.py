@@ -37,8 +37,8 @@ RAIN_THRESHOLD_MM: float = 0.1
 
 def _add_firms_dummy_features(X: pd.DataFrame) -> None:
     """
-    Adds dummy fire features (filled with 0) to maintain compatibility with 
-    legacy models trained with FIRMS data. Ablation studies proved these 
+    Adds dummy fire features (filled with 0) to maintain compatibility with
+    legacy models trained with FIRMS data. Ablation studies proved these
     features had negligible impact, but they are required for unpickling.
     """
     for col in [
