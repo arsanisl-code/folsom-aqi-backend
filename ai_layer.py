@@ -17,7 +17,8 @@ on any API failure so the rest of the system stays up.
 
 import os
 
-import google.generativeai as genai
+from google import genai
+from google.genai import types
 import requests
 
 from logger import get_logger
@@ -75,19 +76,18 @@ atmospheric scientist who simplifies complex data for the Folsom public.
 # ─── Internal helpers ─────────────────────────────────────────────────────────
 
 
-def _get_model() -> genai.GenerativeModel:
-    """Configure Gemini SDK and return a model instance. Raises if key is missing."""
+def _get_client():
+    """
+    Return an authenticated google.genai Client using the env var.
+    Throws RuntimeError if the API key is not set.
+    """
     api_key = os.environ.get("GEMINI_API_KEY", "")
     if not api_key:
         raise RuntimeError(
             "GEMINI_API_KEY environment variable is not set. "
             "Get a free key at https://aistudio.google.com/app/apikey"
         )
-    genai.configure(api_key=api_key)
-    return genai.GenerativeModel(
-        model_name=GEMINI_MODEL,
-        system_instruction=_SYSTEM_PROMPT,
-    )
+    return genai.Client(api_key=api_key)
 
 
 def _format_forecast_as_ai_context(forecast_data: dict) -> str:
@@ -136,7 +136,7 @@ def generate_summary(forecast_data: dict) -> str:
     this field is empty rather than showing an error.
     """
     try:
-        model = _get_model()
+        client = _get_client()
         context = _format_forecast_as_ai_context(forecast_data)
         prompt = (
             "Using the forecast data below, write a single plain-English paragraph "
@@ -147,7 +147,14 @@ def generate_summary(forecast_data: dict) -> str:
             "Write for the general public — no jargon, no bullet points, no markdown.\n\n"
             f"{context}"
         )
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=_SYSTEM_PROMPT,
+                temperature=0.4,
+            )
+        )
         summary = response.text.strip()
         log.info("Summary generated (%s chars)", len(summary))
         return summary
@@ -169,12 +176,19 @@ def answer_question(question: str, forecast_data: dict) -> str:
         return "Please type a question and I'll do my best to answer it."
 
     try:
-        model = _get_model()
+        client = _get_client()
         context = _format_forecast_as_ai_context(forecast_data)
         prompt = (
             f"Current forecast data for Folsom, CA:\n{context}\n\nUser question: {question.strip()}"
         )
-        response = model.generate_content(prompt)
+        response = client.models.generate_content(
+            model=GEMINI_MODEL,
+            contents=prompt,
+            config=types.GenerateContentConfig(
+                system_instruction=_SYSTEM_PROMPT,
+                temperature=0.4,
+            )
+        )
         answer = response.text.strip()
         log.info("Question answered (%s chars)", len(answer))
         return answer

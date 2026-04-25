@@ -227,10 +227,15 @@ def predict_now() -> dict:
                     p_phys = p_full # fallback
 
                 # Blend with Meta-learner
-                # Input to meta is [res_full, res_xgb, res_phys]
-                res_full = p_full - current_aqi
-                res_xgb = p_xgb - current_aqi
-                res_phys = p_phys - current_aqi
+                # Models output raw residuals. Clamp them to absolute space (0-500)
+                # then subtract current_aqi to get clamped residuals for the meta-learner
+                pred_lgbm_full = max(0, min(500, p_full + current_aqi))
+                pred_xgb = max(0, min(500, p_xgb + current_aqi))
+                pred_lgbm_physics = max(0, min(500, p_phys + current_aqi))
+
+                res_full = pred_lgbm_full - current_aqi
+                res_xgb = pred_xgb - current_aqi
+                res_phys = pred_lgbm_physics - current_aqi
 
                 meta_input = np.array([[res_full, res_xgb, res_phys]])
                 residual = models[h]['meta'].predict(meta_input)[0]
@@ -246,9 +251,10 @@ def predict_now() -> dict:
                     q05_abs = current_aqi + q05_raw
                     q95_abs = current_aqi + q95_raw
                 except Exception:
-                    # Generic 15% interval
-                    q05_abs = point_pred * 0.85
-                    q95_abs = point_pred * 1.15
+                    # Generic fallback interval: 15% but at least +/- 5 AQI
+                    margin = max(5.0, point_pred * 0.15)
+                    q05_abs = point_pred - margin
+                    q95_abs = point_pred + margin
             else:
                 # Standard Point Prediction
                 point_res = models[h]["point"].predict(X_imputed)[0]

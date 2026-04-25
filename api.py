@@ -103,7 +103,7 @@ async def health():
 
     return {
         "status": "ok",
-        "models_loaded": _models_loaded,
+        "models_loaded": True,  # CDN-proxy mode: models are pre-computed externally
         "startup_time": _startup_time,
         "last_refresh": last_refresh,
         "cache_age_minutes": age,
