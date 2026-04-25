@@ -45,7 +45,7 @@ class _NNLSMeta:
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-MODEL_VERSION = "Folsom-AQI-Lagrangian-Ensemble"
+MODEL_VERSION = "Folsom-AQI-Navigator-V12"
 CACHE_FILE = Path("data/latest.json")
 
 # Open-Meteo hallucination floor for relative humidity (Folsom grid cell artifact).
@@ -250,6 +250,31 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
 # ─── Prediction Core ──────────────────────────────────────────────────────────
 
 
+def _get_model_metadata() -> dict:
+    """Load model accuracy metrics from the training report."""
+    try:
+        report_path = Path("models/tournament_report.json")
+        if report_path.exists():
+            report = json.loads(report_path.read_text())
+            horizons = []
+            for h_data in report.get("horizons", []):
+                h = h_data.get("horizon_h")
+                # Use ensemble metrics if available, else lgbm_full
+                metrics = h_data.get("ensemble_", h_data.get("lgbm_full_", {}))
+                horizons.append({
+                    "horizon_h": h,
+                    "val_mae": metrics.get("mae"),
+                    "val_r2": metrics.get("r2")
+                })
+            return {
+                "architecture": report.get("architecture"),
+                "horizons": horizons
+            }
+    except Exception:
+        pass
+    return {}
+
+
 def predict_now() -> dict:
     """
     Main orchestration function.
@@ -412,7 +437,8 @@ def predict_now() -> dict:
         "forecasts": forecasts,
         "history_72h": history,
         "ai_summary": "",
-        "model_version": MODEL_VERSION
+        "model_version": MODEL_VERSION,
+        "model_metadata": _get_model_metadata()
     }
 
     # 6. Generate AI summary
