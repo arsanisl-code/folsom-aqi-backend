@@ -176,101 +176,75 @@ def _safe_aqi_scalar(df: pd.DataFrame, ts, col: str) -> float:
 
 def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
     """
-    Build the last 72 hours of observed AQI vs. what the 6h ensemble
-    model would have predicted at each hour (retrodiction).
-
-    Returns list of dicts with keys:
-        timestamp, actual_aqi, forecast_aqi, ci_lo, ci_hi
+    Build the last 72 hours of observed AQI vs. what the 6, 12, 24, 48h ensembles
+    would have predicted (retrodiction).
     """
-    history: list[dict] = []
     now_ts = pd.Timestamp.now(tz=TZ).floor("h")
     cutoff = now_ts - pd.Timedelta(hours=72)
+    history_map: dict[pd.Timestamp, dict] = {}
+    
+    # Initialize with actuals
+    hist_df = df[(df.index > cutoff) & (df.index <= now_ts)].copy()
+    for ts, row in hist_df.iterrows():
+        aqi = row.get("us_aqi", np.nan)
+        history_map[ts] = {
+            "timestamp": ts.isoformat(),
+            "actual_aqi": int(round(float(aqi))) if not np.isnan(float(aqi)) else None
+        }
 
-    try:
-        X_hist, _ = engineer_features(df, horizon_h=6)
-        m6 = models.get(6)
-        if m6 is None:
-            raise ValueError("6h models not loaded — cannot build history")
+    # Add forecasts for each horizon
+    for h in [6, 12, 24, 48]:
+        try:
+            m = models.get(h)
+            feat_list = _FEATURES.get(h)
+            if not m or not feat_list:
+                continue
 
-        X_window = X_hist[(X_hist.index > cutoff) & (X_hist.index <= now_ts)].copy()
+            X_h, _ = engineer_features(df, horizon_h=h)
+            X_window = X_h[(X_h.index > cutoff) & (X_h.index <= now_ts)].copy()
+            if len(X_window) == 0:
+                continue
 
-        if len(X_window) > 0:
-            feat_list = _FEATURES.get(6)
-            if feat_list:
-                X_aligned = X_window.reindex(columns=feat_list, fill_value=0)
-                imputed = m6["imputer"].transform(X_aligned)
-                X_imp = pd.DataFrame(imputed, columns=feat_list, index=X_window.index)
+            X_aligned = X_window.reindex(columns=feat_list, fill_value=0)
+            X_imp = pd.DataFrame(m["imputer"].transform(X_aligned), columns=feat_list, index=X_window.index)
+            base_aqi = X_window["aqi_current"].values if "aqi_current" in X_window.columns else np.zeros(len(X_window))
 
-                base_aqi = X_window["aqi_current"].values if "aqi_current" in X_window.columns \
-                    else np.full(len(X_window), 0.0)
+            if "meta" in m:
+                p_full = m["lgbm_full"].predict(X_imp)
+                p_xgb = m["xgb"].predict(X_imp)
+                phys_cols = m.get("phys_cols", [])
+                p_phys = m["lgbm_physics"].predict(X_imp[[c for c in phys_cols if c in X_imp.columns]]) if phys_cols else p_full
+                
+                # Blend
+                abs_full = np.clip(p_full + base_aqi, 0, 500)
+                abs_xgb = np.clip(p_xgb + base_aqi, 0, 500)
+                abs_phys = np.clip(p_phys + base_aqi, 0, 500)
+                
+                preds = np.zeros(len(X_window))
+                for i in range(len(X_window)):
+                    res_in = np.array([[abs_full[i] - base_aqi[i], abs_xgb[i] - base_aqi[i], abs_phys[i] - base_aqi[i]]])
+                    preds[i] = base_aqi[i] + m["meta"].predict(res_in)[0]
+            else:
+                preds = m["point"].predict(X_imp) + base_aqi
 
-                if "meta" in m6:
-                    # Ensemble path
-                    p_full = m6["lgbm_full"].predict(X_imp)
-                    p_xgb = m6["xgb"].predict(X_imp)
-                    phys_cols = m6.get("phys_cols", [])
-                    if phys_cols:
-                        X_phys = X_imp[[c for c in phys_cols if c in X_imp.columns]]
-                        p_phys = m6["lgbm_physics"].predict(X_phys)
-                    else:
-                        p_phys = p_full
+            preds = np.round(np.clip(preds, 0, 500)).astype(int)
+            for i, ts in enumerate(X_window.index):
+                if ts in history_map:
+                    history_map[ts][f"forecast_{h}h"] = int(preds[i])
+                    # For legacy compatibility, also set the main forecast_aqi to the 6h prediction
+                    if h == 6:
+                        history_map[ts]["forecast_aqi"] = int(preds[i])
+                        # Simple 10% margin for legacy CI
+                        margin = max(5, int(preds[i] * 0.1))
+                        history_map[ts]["ci_lo"] = int(preds[i] - margin)
+                        history_map[ts]["ci_hi"] = int(preds[i] + margin)
 
-                    # Clamp to absolute, compute residuals, blend
-                    abs_full = np.clip(p_full + base_aqi, 0, 500)
-                    abs_xgb = np.clip(p_xgb + base_aqi, 0, 500)
-                    abs_phys = np.clip(p_phys + base_aqi, 0, 500)
+        except Exception as e:
+            log.warning("Retrospective %sh failed: %s", h, e)
 
-                    preds = np.zeros(len(X_window))
-                    for i in range(len(X_window)):
-                        res = np.array([[
-                            abs_full[i] - base_aqi[i],
-                            abs_xgb[i] - base_aqi[i],
-                            abs_phys[i] - base_aqi[i],
-                        ]])
-                        preds[i] = base_aqi[i] + m6["meta"].predict(res)[0]
-
-                    # Confidence intervals: use ensemble spread as proxy
-                    spread = np.abs(abs_full - abs_phys) / 2.0
-                    margin = np.maximum(spread, 5.0)
-                    q05s = preds - margin
-                    q95s = preds + margin
-                else:
-                    # Legacy point model path
-                    preds = m6["point"].predict(X_imp) + base_aqi
-                    q05s = m6["q05"].predict(X_imp) + base_aqi
-                    q95s = m6["q95"].predict(X_imp) + base_aqi
-
-                preds = np.round(np.clip(preds, 0, 500)).astype(int)
-                q05s = np.round(np.clip(q05s, 0, 500)).astype(int)
-                q95s = np.round(np.clip(q95s, 0, 500)).astype(int)
-
-                for i, ts in enumerate(X_window.index):
-                    actual_raw = _safe_aqi_scalar(df, ts, "us_aqi")
-                    actual_val = int(round(actual_raw)) if not np.isnan(actual_raw) else None
-                    history.append({
-                        "timestamp": ts.isoformat(),
-                        "actual_aqi": actual_val,
-                        "forecast_aqi": int(preds[i]),
-                        "ci_lo": int(q05s[i]),
-                        "ci_hi": int(q95s[i]),
-                    })
-
-    except Exception as exc:
-        log.error("history_72h build failed: %s", exc, exc_info=True)
-        # Fallback: return actuals only, no forecast line
-        hist_df = df[df.index > cutoff].copy()
-        for ts, row in hist_df.iterrows():
-            aqi = row.get("us_aqi", np.nan)
-            actual = int(round(float(aqi))) if not np.isnan(float(aqi)) else None
-            history.append({
-                "timestamp": ts.isoformat(),
-                "actual_aqi": actual,
-                "forecast_aqi": None,
-                "ci_lo": None,
-                "ci_hi": None,
-            })
-
-    return history[-72:]
+    # Sort and convert to list
+    sorted_ts = sorted(history_map.keys())
+    return [history_map[ts] for ts in sorted_ts]
 
 
 # ─── Prediction Core ──────────────────────────────────────────────────────────
@@ -295,9 +269,13 @@ def predict_now() -> dict:
         log.error("Failed to fetch data. Aborting.")
         return {"error": "Data fetch failed"}
 
-    # 2. Extract current state
-    current_row = df.iloc[-1]
-    current_aqi = int(round(current_row["us_aqi"]))
+    # 2. Extract current state (use last non-nan for current AQI if available)
+    aqi_series = df["us_aqi"].ffill()
+    if aqi_series.isna().all():
+        log.error("No valid AQI data in dataframe.")
+        return {"error": "No AQI data"}
+        
+    current_aqi = int(round(aqi_series.iloc[-1]))
     current_cat, current_color = aqi_category(current_aqi)
 
     # AirNow check for current station
