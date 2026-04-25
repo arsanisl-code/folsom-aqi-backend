@@ -156,6 +156,123 @@ def load_all_models() -> dict:
     return all_models
 
 
+# ─── History helpers ──────────────────────────────────────────────────────────
+
+
+def _safe_aqi_scalar(df: pd.DataFrame, ts, col: str) -> float:
+    """
+    Safely extract a scalar from df at index ts for column col.
+    Handles DST spring-forward duplicates by taking the first value.
+    Returns np.nan if not found.
+    """
+    try:
+        val = df.loc[ts, col]
+        if isinstance(val, pd.Series):
+            val = val.iloc[0]
+        return float(val)
+    except (KeyError, IndexError):
+        return np.nan
+
+
+def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
+    """
+    Build the last 72 hours of observed AQI vs. what the 6h ensemble
+    model would have predicted at each hour (retrodiction).
+
+    Returns list of dicts with keys:
+        timestamp, actual_aqi, forecast_aqi, ci_lo, ci_hi
+    """
+    history: list[dict] = []
+    now_ts = pd.Timestamp.now(tz=TZ).floor("h")
+    cutoff = now_ts - pd.Timedelta(hours=72)
+
+    try:
+        X_hist, _ = engineer_features(df, horizon_h=6)
+        m6 = models.get(6)
+        if m6 is None:
+            raise ValueError("6h models not loaded — cannot build history")
+
+        X_window = X_hist[(X_hist.index > cutoff) & (X_hist.index <= now_ts)].copy()
+
+        if len(X_window) > 0:
+            feat_list = _FEATURES.get(6)
+            if feat_list:
+                X_aligned = X_window.reindex(columns=feat_list, fill_value=0)
+                imputed = m6["imputer"].transform(X_aligned)
+                X_imp = pd.DataFrame(imputed, columns=feat_list, index=X_window.index)
+
+                base_aqi = X_window["aqi_current"].values if "aqi_current" in X_window.columns \
+                    else np.full(len(X_window), 0.0)
+
+                if "meta" in m6:
+                    # Ensemble path
+                    p_full = m6["lgbm_full"].predict(X_imp)
+                    p_xgb = m6["xgb"].predict(X_imp)
+                    phys_cols = m6.get("phys_cols", [])
+                    if phys_cols:
+                        X_phys = X_imp[[c for c in phys_cols if c in X_imp.columns]]
+                        p_phys = m6["lgbm_physics"].predict(X_phys)
+                    else:
+                        p_phys = p_full
+
+                    # Clamp to absolute, compute residuals, blend
+                    abs_full = np.clip(p_full + base_aqi, 0, 500)
+                    abs_xgb = np.clip(p_xgb + base_aqi, 0, 500)
+                    abs_phys = np.clip(p_phys + base_aqi, 0, 500)
+
+                    preds = np.zeros(len(X_window))
+                    for i in range(len(X_window)):
+                        res = np.array([[
+                            abs_full[i] - base_aqi[i],
+                            abs_xgb[i] - base_aqi[i],
+                            abs_phys[i] - base_aqi[i],
+                        ]])
+                        preds[i] = base_aqi[i] + m6["meta"].predict(res)[0]
+
+                    # Confidence intervals: use ensemble spread as proxy
+                    spread = np.abs(abs_full - abs_phys) / 2.0
+                    margin = np.maximum(spread, 5.0)
+                    q05s = preds - margin
+                    q95s = preds + margin
+                else:
+                    # Legacy point model path
+                    preds = m6["point"].predict(X_imp) + base_aqi
+                    q05s = m6["q05"].predict(X_imp) + base_aqi
+                    q95s = m6["q95"].predict(X_imp) + base_aqi
+
+                preds = np.round(np.clip(preds, 0, 500)).astype(int)
+                q05s = np.round(np.clip(q05s, 0, 500)).astype(int)
+                q95s = np.round(np.clip(q95s, 0, 500)).astype(int)
+
+                for i, ts in enumerate(X_window.index):
+                    actual_raw = _safe_aqi_scalar(df, ts, "us_aqi")
+                    actual_val = int(round(actual_raw)) if not np.isnan(actual_raw) else None
+                    history.append({
+                        "timestamp": ts.isoformat(),
+                        "actual_aqi": actual_val,
+                        "forecast_aqi": int(preds[i]),
+                        "ci_lo": int(q05s[i]),
+                        "ci_hi": int(q95s[i]),
+                    })
+
+    except Exception as exc:
+        log.error("history_72h build failed: %s", exc, exc_info=True)
+        # Fallback: return actuals only, no forecast line
+        hist_df = df[df.index > cutoff].copy()
+        for ts, row in hist_df.iterrows():
+            aqi = row.get("us_aqi", np.nan)
+            actual = int(round(float(aqi))) if not np.isnan(float(aqi)) else None
+            history.append({
+                "timestamp": ts.isoformat(),
+                "actual_aqi": actual,
+                "forecast_aqi": None,
+                "ci_lo": None,
+                "ci_hi": None,
+            })
+
+    return history[-72:]
+
+
 # ─── Prediction Core ──────────────────────────────────────────────────────────
 
 
@@ -285,15 +402,8 @@ def predict_now() -> dict:
         except Exception as e:
             log.error(f"Error predicting {h}h: {e}")
 
-    # 5. History (Last 72h)
-    history = []
-    # Drop rows where us_aqi is NaN
-    hist_df = df.dropna(subset=["us_aqi"]).tail(72)
-    for ts, row in hist_df.iterrows():
-        history.append({
-            "timestamp": ts.isoformat(),
-            "aqi": int(round(row["us_aqi"]))
-        })
+    # 5. History (Last 72h) — actual vs forecast for the dashboard chart
+    history = _build_history_72h(df, models)
 
     # 6. AI Summary - populated below after dict assembly
 
