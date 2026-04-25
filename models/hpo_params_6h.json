@@ -1,36 +1,36 @@
 {
   "lgbm_full": {
-    "learning_rate": 0.022003388130410535,
-    "num_leaves": 92,
-    "max_depth": 12,
-    "min_child_samples": 56,
-    "feature_fraction": 0.8751125574978215,
-    "bagging_fraction": 0.8405229031317443,
-    "reg_alpha": 0.1490463400688294,
-    "reg_lambda": 0.8936636094601745,
-    "path_smooth": 1.244686310381993,
-    "min_split_gain": 0.1543364443360338
+    "learning_rate": 0.03098079229473509,
+    "num_leaves": 53,
+    "max_depth": 10,
+    "min_child_samples": 51,
+    "feature_fraction": 0.8499068892096701,
+    "bagging_fraction": 0.5960378036649845,
+    "reg_alpha": 1.577208124110034,
+    "reg_lambda": 0.6118092634972621,
+    "path_smooth": 0.7428775647659905,
+    "min_split_gain": 0.29932746962637213
   },
   "xgb": {
-    "eta": 0.017215740360912033,
-    "max_depth": 8,
-    "subsample": 0.669347258308109,
-    "colsample_bytree": 0.8873825704331071,
-    "min_child_weight": 48,
-    "gamma": 4.412872639102341,
-    "reg_alpha": 0.0002553571249943513,
-    "reg_lambda": 0.09642189525141213,
-    "max_delta_step": 8
+    "eta": 0.03805355418509045,
+    "max_depth": 6,
+    "subsample": 0.7737202507030911,
+    "colsample_bytree": 0.9542127829450818,
+    "min_child_weight": 44,
+    "gamma": 4.434874253249162,
+    "reg_alpha": 3.187645158249959,
+    "reg_lambda": 3.3682588569129357,
+    "max_delta_step": 6
   },
   "lgbm_physics": {
-    "learning_rate": 0.01147767413764376,
-    "num_leaves": 47,
-    "max_depth": 8,
-    "min_child_samples": 10,
-    "feature_fraction": 0.6818407897411919,
-    "bagging_fraction": 0.5346614710317286,
-    "reg_alpha": 0.0009747289275194115,
-    "reg_lambda": 3.1840482530973824,
-    "path_smooth": 1.2820369628804063
+    "learning_rate": 0.04093175887977308,
+    "num_leaves": 48,
+    "max_depth": 7,
+    "min_child_samples": 51,
+    "feature_fraction": 0.5838092375611106,
+    "bagging_fraction": 0.6922753631933708,
+    "reg_alpha": 0.07590307194889215,
+    "reg_lambda": 0.0005258328441825533,
+    "path_smooth": 1.2795123665598285
   }
 }

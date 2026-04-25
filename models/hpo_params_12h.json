@@ -1,36 +1,36 @@
 {
   "lgbm_full": {
-    "learning_rate": 0.021020950080606428,
-    "num_leaves": 44,
-    "max_depth": 10,
-    "min_child_samples": 49,
-    "feature_fraction": 0.5881677911538412,
-    "bagging_fraction": 0.7856157861614388,
-    "reg_alpha": 0.0026010239655899227,
-    "reg_lambda": 0.07425064903556533,
-    "path_smooth": 0.4438053154799304,
-    "min_split_gain": 0.12905662232342283
+    "learning_rate": 0.03852880261976799,
+    "num_leaves": 62,
+    "max_depth": 8,
+    "min_child_samples": 52,
+    "feature_fraction": 0.7607562156096492,
+    "bagging_fraction": 0.7531165787488049,
+    "reg_alpha": 0.00031635048237423324,
+    "reg_lambda": 0.0064933602470096064,
+    "path_smooth": 1.5438304635605966,
+    "min_split_gain": 0.8690193908638018
   },
   "xgb": {
-    "eta": 0.012350357017204591,
-    "max_depth": 6,
-    "subsample": 0.5266326043162839,
-    "colsample_bytree": 0.7385008392494241,
-    "min_child_weight": 50,
-    "gamma": 2.864755554955053,
-    "reg_alpha": 0.16056615395974283,
-    "reg_lambda": 0.3620263178695453,
-    "max_delta_step": 3
+    "eta": 0.016858907954536848,
+    "max_depth": 7,
+    "subsample": 0.5083281152386258,
+    "colsample_bytree": 0.6622943495406944,
+    "min_child_weight": 44,
+    "gamma": 3.333624889823973,
+    "reg_alpha": 0.1878237131528126,
+    "reg_lambda": 5.27014265462661,
+    "max_delta_step": 8
   },
   "lgbm_physics": {
-    "learning_rate": 0.008190202007483272,
-    "num_leaves": 57,
+    "learning_rate": 0.015785694339344673,
+    "num_leaves": 61,
     "max_depth": 8,
-    "min_child_samples": 31,
-    "feature_fraction": 0.8521404944929096,
-    "bagging_fraction": 0.662184548183557,
-    "reg_alpha": 0.295827657084764,
-    "reg_lambda": 0.8603144737156885,
-    "path_smooth": 0.8015084752814614
+    "min_child_samples": 20,
+    "feature_fraction": 0.739693473546965,
+    "bagging_fraction": 0.6692120827964072,
+    "reg_alpha": 0.0021319296374958043,
+    "reg_lambda": 0.000114101390111186,
+    "path_smooth": 0.8582262338908575
   }
 }
