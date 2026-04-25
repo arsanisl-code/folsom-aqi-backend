@@ -17,9 +17,9 @@ on any API failure so the rest of the system stays up.
 
 import os
 
+import requests
 from google import genai
 from google.genai import types
-import requests
 
 from logger import get_logger
 
