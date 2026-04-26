@@ -975,10 +975,16 @@ def train_ensemble_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetim
         log.info("  %-26s  MAE=%6.3f  R²=%6.4f", name, mae, r2)
         return {"mae": round(float(mae), 3), "r2": round(float(r2), 4)}
 
+    # Conformal Prediction Margin
+    abs_errors = np.abs(y_val_abs - pred_meta)
+    margin_90 = np.percentile(abs_errors, 90)
+    log.info("  Conformal 90%% Margin: %.2f", margin_90)
+
     horizon_wall_s = round(time.perf_counter() - t_start, 2)
 
     result = {
         "horizon_h": horizon_h,
+        "conformal_margin_90": round(float(margin_90), 2),
         "horizon_wall_s": horizon_wall_s,
         "baseline_lgbm_v9": _load_v9_baseline(horizon_h),
         "lgbm_full_": _m("LGBM-Full ", pred_lgbm_full),
@@ -1188,6 +1194,16 @@ def main() -> None:
     report["total_run_s"] = total_run_s
     report["completed_at"] = datetime.now().isoformat()
     _write_report(report)
+
+    # Extract and save conformal margins
+    conformal_margins = {}
+    for r in report.get("horizons", []):
+        h = r.get("horizon_h")
+        margin = r.get("conformal_margin_90")
+        if h and margin:
+            conformal_margins[str(h)] = margin
+    (MODELS_DIR / "conformal_margins.json").write_text(json.dumps(conformal_margins, indent=2))
+    log.info("  Conformal margins saved: %s", conformal_margins)
 
     _print_tournament_table(report)
 

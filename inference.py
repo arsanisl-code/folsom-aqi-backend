@@ -98,7 +98,13 @@ try:
     if _cs.exists():
         _raw = json.loads(_cs.read_text())
         _CONFORMAL_SCALES = {int(k): float(v) for k, v in _raw.get("scales", {}).items()}
-except Exception:
+
+    _CONFORMAL_MARGINS = {}
+    _cm = Path("models/conformal_margins.json")
+    if _cm.exists():
+        _CONFORMAL_MARGINS = {int(k): float(v) for k, v in json.loads(_cm.read_text()).items()}
+
+except Exception as exc:
     pass  # Graceful degradation if files aren't available yet
 
 
@@ -368,20 +374,12 @@ def predict_now() -> dict:
                 residual = models[h]['meta'].predict(meta_input)[0]
                 point_pred = current_aqi + residual
 
-                # Note: For ensemble, we still use legacy point/q05 files for intervals
-                # unless we retrain ensemble with quantiles.
-                # For now, fallback to lgbm_point intervals if available.
-                try:
-                    q05_raw = joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl").predict(X_imputed)[0]
-                    q95_raw = joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl").predict(X_imputed)[0]
-                    # Convert residuals to absolute
-                    q05_abs = current_aqi + q05_raw
-                    q95_abs = current_aqi + q95_raw
-                except Exception:
-                    # Generic fallback interval: 15% but at least +/- 5 AQI
-                    margin = max(5.0, point_pred * 0.15)
-                    q05_abs = point_pred - margin
-                    q95_abs = point_pred + margin
+                # ── Data-Driven Split Conformal Prediction Intervals ──
+                # Use empirical 90th percentile of absolute validation residuals
+                margin = _CONFORMAL_MARGINS.get(h, max(5.0, point_pred * 0.15))
+                q05_abs = point_pred - margin
+                q95_abs = point_pred + margin
+
             else:
                 # Standard Point Prediction
                 point_res = models[h]["point"].predict(X_imputed)[0]
