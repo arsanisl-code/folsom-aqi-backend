@@ -302,12 +302,14 @@ def predict_now() -> dict:
 
     current_aqi = int(round(aqi_series.iloc[-1]))
     current_cat, current_color = aqi_category(current_aqi)
+    primary_pollutant = "PM2.5"  # Default for Open-Meteo Air Quality API
 
     # AirNow check for current station (Ground Truth)
     station_info = fetch_airnow_current()
     if station_info and "aqi" in station_info:
         current_aqi = station_info["aqi"]
         current_cat, current_color = aqi_category(current_aqi)
+        primary_pollutant = station_info.get("primary_pollutant", "PM2.5")
         source_name = f"AirNow ({station_info.get('station', 'Folsom-Natoma')})"
     else:
         source_name = "Open-Meteo (Interpolated)"
@@ -440,6 +442,7 @@ def predict_now() -> dict:
             "aqi": current_aqi,
             "category": current_cat,
             "color": current_color,
+            "primary_pollutant": primary_pollutant,
             "source": source_name,
             "timestamp": datetime.now(TZ).isoformat(),
         },
