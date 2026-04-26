@@ -207,7 +207,7 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
                 continue
 
             X_h, _ = engineer_features(df, horizon_h=h)
-            X_window = X_h[(X_h.index > cutoff) & (X_h.index <= now_ts)].copy()
+            X_window = X_h[(X_h.index > (cutoff - pd.Timedelta(hours=h))) & (X_h.index <= now_ts)].copy()
             if len(X_window) == 0:
                 continue
 
@@ -235,15 +235,16 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
 
             preds = np.round(np.clip(preds, 0, 500)).astype(int)
             for i, ts in enumerate(X_window.index):
-                if ts in history_map:
-                    history_map[ts][f"forecast_{h}h"] = int(preds[i])
+                target_ts = ts + pd.Timedelta(hours=h)
+                if target_ts in history_map:
+                    history_map[target_ts][f"forecast_{h}h"] = int(preds[i])
                     # For legacy compatibility, also set the main forecast_aqi to the 6h prediction
                     if h == 6:
-                        history_map[ts]["forecast_aqi"] = int(preds[i])
+                        history_map[target_ts]["forecast_aqi"] = int(preds[i])
                         # Simple 10% margin for legacy CI
                         margin = max(5, int(preds[i] * 0.1))
-                        history_map[ts]["ci_lo"] = int(preds[i] - margin)
-                        history_map[ts]["ci_hi"] = int(preds[i] + margin)
+                        history_map[target_ts]["ci_lo"] = int(preds[i] - margin)
+                        history_map[target_ts]["ci_hi"] = int(preds[i] + margin)
 
         except Exception as e:
             log.warning("Retrospective %sh failed: %s", h, e)
