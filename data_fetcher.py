@@ -376,6 +376,7 @@ def fetch_airnow_current() -> dict | None:
             "aqi": int(best.get("AQI", 0)),
             "category": cat.get("Name", "Unknown"),
             "primary_pollutant": best.get("ParameterName", "Unknown"),
+            "station": best.get("ReportingArea", "Folsom-Natoma"),
             "timestamp": best.get("DateObserved", "").strip()
             + "T"
             + f"{best.get('HourObserved', 0):02d}:00:00",

@@ -1,46 +1,46 @@
 {
-  "generated_at": "2026-04-26T13:05:39.633762-07:00",
-  "data_freshness_minutes": 5,
+  "generated_at": "2026-04-26T13:24:26.871202-07:00",
+  "data_freshness_minutes": 24,
   "location": {
     "name": "Folsom, CA",
     "lat": 38.678,
     "lon": -121.1761
   },
   "current": {
-    "aqi": 59,
-    "category": "Moderate",
-    "color": "#ffff00",
-    "source": "AirNow (Folsom-Natoma)",
-    "timestamp": "2026-04-26T13:05:39.633762-07:00"
+    "aqi": 35,
+    "category": "Good",
+    "color": "#00e400",
+    "source": "AirNow (Folsom)",
+    "timestamp": "2026-04-26T13:24:26.871202-07:00"
   },
   "forecasts": {
     "6h": {
-      "aqi": 55,
-      "ci_lo": 47,
-      "ci_hi": 63,
-      "category": "Moderate",
-      "color": "#ffff00"
+      "aqi": 31,
+      "ci_lo": 26,
+      "ci_hi": 36,
+      "category": "Good",
+      "color": "#00e400"
     },
     "12h": {
-      "aqi": 56,
-      "ci_lo": 47,
-      "ci_hi": 64,
-      "category": "Moderate",
-      "color": "#ffff00"
+      "aqi": 32,
+      "ci_lo": 27,
+      "ci_hi": 37,
+      "category": "Good",
+      "color": "#00e400"
     },
     "24h": {
-      "aqi": 54,
-      "ci_lo": 46,
-      "ci_hi": 62,
-      "category": "Moderate",
-      "color": "#ffff00"
+      "aqi": 30,
+      "ci_lo": 25,
+      "ci_hi": 35,
+      "category": "Good",
+      "color": "#00e400"
     },
     "48h": {
-      "aqi": 52,
-      "ci_lo": 44,
-      "ci_hi": 60,
-      "category": "Moderate",
-      "color": "#ffff00"
+      "aqi": 28,
+      "ci_lo": 23,
+      "ci_hi": 33,
+      "category": "Good",
+      "color": "#00e400"
     }
   },
   "history_72h": [
@@ -837,7 +837,7 @@
       "forecast_48h": 48
     }
   ],
-  "ai_summary": "Currently, the air quality in Folsom is rated as Moderate with an AQI of 59, meaning it's acceptable but unusually sensitive individuals might consider reducing prolonged outdoor exertion. Conditions are expected to remain in the Moderate range over the next 48 hours, with a slight downward trend. For today, most residents can enjoy outdoor activities, though those with respiratory sensitivities should be mindful of extended periods of exertion.",
+  "ai_summary": "The current air quality in Folsom is good, with an AQI of 35, meaning it's safe for everyone to enjoy outdoor activities. Conditions are expected to remain good over the next 48 hours, with the AQI forecast to stay in the good range. You can confidently plan your outdoor activities without concern for air quality.",
   "model_version": "Folsom-AQI-Navigator-V12",
   "model_metadata": {
     "architecture": "V11 Feature-Diversity Ensemble (LGBM-Full + XGB + LGBM-Physics + NNLS-Bias)",

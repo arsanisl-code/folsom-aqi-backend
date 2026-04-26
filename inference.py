@@ -303,9 +303,14 @@ def predict_now() -> dict:
     current_aqi = int(round(aqi_series.iloc[-1]))
     current_cat, current_color = aqi_category(current_aqi)
 
-    # AirNow check for current station
+    # AirNow check for current station (Ground Truth)
     station_info = fetch_airnow_current()
-    source_name = station_info.get("station", "AirNow (Folsom-Natoma)")
+    if station_info and "aqi" in station_info:
+        current_aqi = station_info["aqi"]
+        current_cat, current_color = aqi_category(current_aqi)
+        source_name = f"AirNow ({station_info.get('station', 'Folsom-Natoma')})"
+    else:
+        source_name = "Open-Meteo (Interpolated)"
 
     # 3. Build Forecasts
     models = load_all_models()
