@@ -933,7 +933,7 @@ def train_ensemble_horizon(df: pd.DataFrame, horizon_h: int, val_cutoff: datetim
     joblib.dump(xgb_final, MODELS_DIR / f"xgb_{horizon_h}h.pkl")
     joblib.dump(lgbm_physics_final, MODELS_DIR / f"lgbm_physics_{horizon_h}h.pkl")
     (MODELS_DIR / f"physics_cols_{horizon_h}h.json").write_text(json.dumps(physics_cols, indent=2))
-    
+
     # NEW: Save unique feature names for this horizon to prevent inference mismatch
     feature_names = X_train_df.columns.tolist()
     (MODELS_DIR / f"feature_names_{horizon_h}h.json").write_text(json.dumps(feature_names, indent=2))

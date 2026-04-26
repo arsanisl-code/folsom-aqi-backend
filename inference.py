@@ -182,7 +182,7 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
     now_ts = pd.Timestamp.now(tz=TZ).floor("h")
     cutoff = now_ts - pd.Timedelta(hours=72)
     history_map: dict[pd.Timestamp, dict] = {}
-    
+
     # Initialize with actuals
     hist_df = df[(df.index > cutoff) & (df.index <= now_ts)].copy()
     for ts, row in hist_df.iterrows():
@@ -214,12 +214,12 @@ def _build_history_72h(df: pd.DataFrame, models: dict) -> list[dict]:
                 p_xgb = m["xgb"].predict(X_imp)
                 phys_cols = m.get("phys_cols", [])
                 p_phys = m["lgbm_physics"].predict(X_imp[[c for c in phys_cols if c in X_imp.columns]]) if phys_cols else p_full
-                
+
                 # Blend
                 abs_full = np.clip(p_full + base_aqi, 0, 500)
                 abs_xgb = np.clip(p_xgb + base_aqi, 0, 500)
                 abs_phys = np.clip(p_phys + base_aqi, 0, 500)
-                
+
                 preds = np.zeros(len(X_window))
                 for i in range(len(X_window)):
                     res_in = np.array([[abs_full[i] - base_aqi[i], abs_xgb[i] - base_aqi[i], abs_phys[i] - base_aqi[i]]])
@@ -299,7 +299,7 @@ def predict_now() -> dict:
     if aqi_series.isna().all():
         log.error("No valid AQI data in dataframe.")
         return {"error": "No AQI data"}
-        
+
     current_aqi = int(round(aqi_series.iloc[-1]))
     current_cat, current_color = aqi_category(current_aqi)
 
@@ -413,8 +413,12 @@ def predict_now() -> dict:
     # Calculate data freshness
     data_age = 0
     try:
-        latest_data_ts = df.index.max()
-        data_age = int((datetime.now(TZ) - latest_data_ts).total_seconds() / 60)
+        # Filter to only include observed data (past/present) to avoid forecast timestamps from Open-Meteo
+        now_dt = datetime.now(TZ)
+        observed = df[df.index <= now_dt]
+        if not observed.empty:
+            latest_data_ts = observed[observed["us_aqi"].notna()].index.max()
+            data_age = int((now_dt - latest_data_ts).total_seconds() / 60)
     except Exception:
         pass
 

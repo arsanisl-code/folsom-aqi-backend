@@ -1,7 +1,9 @@
 import json
-import pandas as pd
-from features import engineer_features
 from pathlib import Path
+
+import pandas as pd
+
+from features import engineer_features
 
 # Load a small slice of data to get feature names
 df = pd.read_parquet("data/cache/recent_combined_ph168_fd5.parquet").head(100)
