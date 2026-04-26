@@ -309,7 +309,16 @@ def predict_now() -> dict:
     if station_info and "aqi" in station_info:
         current_aqi = station_info["aqi"]
         current_cat, current_color = aqi_category(current_aqi)
-        primary_pollutant = station_info.get("primary_pollutant", "PM2.5")
+        raw_pollutant = station_info.get("primary_pollutant", "PM2.5")
+        pollutant_map = {
+            "O3": "Ozone",
+            "PM2.5": "PM2.5",
+            "PM10": "PM10",
+            "CO": "CO",
+            "NO2": "NO2",
+            "SO2": "SO2"
+        }
+        primary_pollutant = pollutant_map.get(raw_pollutant, raw_pollutant)
         source_name = f"AirNow ({station_info.get('station', 'Folsom-Natoma')})"
     else:
         source_name = "Open-Meteo (Interpolated)"

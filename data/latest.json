@@ -1,61 +1,50 @@
 {
-  "generated_at": "2026-04-26T13:36:36.812401-07:00",
-  "data_freshness_minutes": 36,
+  "generated_at": "2026-04-26T14:59:31.698711-07:00",
+  "data_freshness_minutes": 59,
   "location": {
     "name": "Folsom, CA",
     "lat": 38.678,
     "lon": -121.1761
   },
   "current": {
-    "aqi": 35,
+    "aqi": 36,
     "category": "Good",
     "color": "#00e400",
-    "primary_pollutant": "O3",
+    "primary_pollutant": "Ozone",
     "source": "AirNow (Folsom)",
-    "timestamp": "2026-04-26T13:36:36.812401-07:00"
+    "timestamp": "2026-04-26T14:59:31.698711-07:00"
   },
   "forecasts": {
     "6h": {
-      "aqi": 31,
-      "ci_lo": 26,
-      "ci_hi": 36,
-      "category": "Good",
-      "color": "#00e400"
-    },
-    "12h": {
       "aqi": 32,
       "ci_lo": 27,
       "ci_hi": 37,
       "category": "Good",
       "color": "#00e400"
     },
+    "12h": {
+      "aqi": 33,
+      "ci_lo": 28,
+      "ci_hi": 38,
+      "category": "Good",
+      "color": "#00e400"
+    },
     "24h": {
-      "aqi": 30,
-      "ci_lo": 25,
-      "ci_hi": 35,
+      "aqi": 31,
+      "ci_lo": 26,
+      "ci_hi": 36,
       "category": "Good",
       "color": "#00e400"
     },
     "48h": {
-      "aqi": 28,
-      "ci_lo": 23,
-      "ci_hi": 33,
+      "aqi": 29,
+      "ci_lo": 24,
+      "ci_hi": 34,
       "category": "Good",
       "color": "#00e400"
     }
   },
   "history_72h": [
-    {
-      "timestamp": "2026-04-23T14:00:00-07:00",
-      "actual_aqi": 30,
-      "forecast_6h": 44,
-      "forecast_aqi": 44,
-      "ci_lo": 39,
-      "ci_hi": 49,
-      "forecast_12h": 30,
-      "forecast_24h": 36,
-      "forecast_48h": 35
-    },
     {
       "timestamp": "2026-04-23T15:00:00-07:00",
       "actual_aqi": 34,
@@ -836,9 +825,20 @@
       "forecast_12h": 43,
       "forecast_24h": 42,
       "forecast_48h": 48
+    },
+    {
+      "timestamp": "2026-04-26T14:00:00-07:00",
+      "actual_aqi": 44,
+      "forecast_6h": 45,
+      "forecast_aqi": 45,
+      "ci_lo": 40,
+      "ci_hi": 50,
+      "forecast_12h": 43,
+      "forecast_24h": 42,
+      "forecast_48h": 47
     }
   ],
-  "ai_summary": "The current air quality in Folsom is good, with an AQI of 35, meaning it's safe for everyone to enjoy outdoor activities. Conditions are expected to remain good and even slightly improve over the next 48 hours, with the AQI forecast to stay below 40. You can confidently plan your outdoor activities today and tomorrow.",
+  "ai_summary": "Currently, Folsom's air quality is good with an AQI of 36, meaning it's satisfactory for everyone to enjoy outdoor activities. Conditions are expected to remain good and even slightly improve over the next 48 hours, with the AQI forecast to stay in the good range. You can confidently plan your outdoor activities today and for the next couple of days.",
   "model_version": "Folsom-AQI-Navigator-V12",
   "model_metadata": {
     "architecture": "V11 Feature-Diversity Ensemble (LGBM-Full + XGB + LGBM-Physics + NNLS-Bias)",
