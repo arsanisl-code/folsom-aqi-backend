@@ -73,6 +73,7 @@ DATA_DIR.mkdir(parents=True, exist_ok=True)
 # ── Model Metadata (loaded once at import) ────────────────────────────────
 _METRICS: dict = {}
 _FEATURES: dict = {}  # keyed by horizon_h
+_METRICS_MAE: dict[int, float] = {}  # keyed by horizon_h
 _CONFORMAL_SCALES: dict[int, float] = {}  # keyed by horizon_h; 0.0 = no correction
 try:
     _m = Path("models/training_metrics.json")
@@ -80,6 +81,11 @@ try:
          _m = Path("models/tournament_report.json") # Fallback to ensemble report
     if _m.exists():
         _METRICS = json.loads(_m.read_text())
+        # Extract ensemble MAE for each horizon for accurate CI fallback
+        for _h_meta in _METRICS.get("horizons", []):
+            _h_val = _h_meta.get("horizon_h")
+            _mae_val = _h_meta.get("ensemble_", {}).get("mae", 5.0)
+            _METRICS_MAE[_h_val] = _mae_val
 
     for _h in [6, 12, 24, 48]:
         _f = Path(f"models/feature_names_{_h}h.json")
@@ -377,20 +383,14 @@ def predict_now() -> dict:
                 residual = models[h]['meta'].predict(meta_input)[0]
                 point_pred = current_aqi + residual
 
-                # Note: For ensemble, we still use legacy point/q05 files for intervals
-                # unless we retrain ensemble with quantiles.
-                # For now, fallback to lgbm_point intervals if available.
-                try:
-                    q05_raw = joblib.load(MODELS_DIR / f"lgbm_q05_{h}h.pkl").predict(X_imputed)[0]
-                    q95_raw = joblib.load(MODELS_DIR / f"lgbm_q95_{h}h.pkl").predict(X_imputed)[0]
-                    # Convert residuals to absolute
-                    q05_abs = current_aqi + q05_raw
-                    q95_abs = current_aqi + q95_raw
-                except Exception:
-                    # Generic fallback interval: 15% but at least +/- 5 AQI
-                    margin = max(5.0, point_pred * 0.15)
-                    q05_abs = point_pred - margin
-                    q95_abs = point_pred + margin
+                # Note: For ensemble, we use the validation MAE from tournament_report.json
+                # as a proxy for the 90% confidence interval.
+                # A common heuristic for 90% CI is +/- 2.0 * MAE for typical AQI error distributions.
+                mae_fallback = _METRICS_MAE.get(h, 5.0)
+                margin = mae_fallback * 2.0
+                
+                q05_abs = point_pred - margin
+                q95_abs = point_pred + margin
             else:
                 # Standard Point Prediction
                 point_res = models[h]["point"].predict(X_imputed)[0]
