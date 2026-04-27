@@ -403,7 +403,7 @@ def predict_now() -> dict:
             cat, color = aqi_category(point_final)
             from datetime import timedelta
             valid_at_ts = datetime.now(TZ) + timedelta(hours=h)
-            
+
             forecasts[f"{h}h"] = {
                 "aqi": point_final,
                 "ci_lo": ci_lo,
