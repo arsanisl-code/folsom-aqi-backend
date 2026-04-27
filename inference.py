@@ -475,7 +475,8 @@ def load_cached_forecast(prefer_remote: bool = False) -> dict:
     """
     if prefer_remote:
         # Folsom AQI Navigator CDN URL (data-cache branch)
-        url = "https://raw.githubusercontent.com/arsanisl-code/folsom-aqi-backend/data-cache/latest.json"
+        # We append a cache-busting timestamp to bypass Fastly's aggressive caching of raw.githubusercontent.com
+        url = f"https://raw.githubusercontent.com/arsanisl-code/folsom-aqi-backend/data-cache/latest.json?t={int(time.time())}"
         try:
             resp = requests.get(url, timeout=5)
             if resp.status_code == 200:
