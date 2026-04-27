@@ -1,65 +1,54 @@
 {
-  "generated_at": "2026-04-26T15:30:39.873799-07:00",
-  "data_freshness_minutes": 30,
+  "generated_at": "2026-04-26T16:04:51.165426-07:00",
+  "data_freshness_minutes": 4,
   "location": {
-    "name": "Folsom, CA",
-    "lat": 38.678,
-    "lon": -121.1761
+    "name": "Davis, CA",
+    "lat": 38.5449,
+    "lon": -121.7405
   },
   "current": {
-    "aqi": 39,
+    "aqi": 49,
     "category": "Good",
     "color": "#00e400",
-    "primary_pollutant": "O3",
-    "source": "AirNow (Folsom)",
-    "timestamp": "2026-04-26T15:30:39.873799-07:00"
+    "primary_pollutant": "PM2.5",
+    "source": "AirNow (Davis)",
+    "timestamp": "2026-04-26T16:04:51.165426-07:00"
   },
   "forecasts": {
     "6h": {
-      "aqi": 35,
-      "ci_lo": 31,
-      "ci_hi": 39,
+      "aqi": 45,
+      "ci_lo": 41,
+      "ci_hi": 49,
       "category": "Good",
       "color": "#00e400",
-      "valid_at": "2026-04-26T21:30:39.627100-07:00"
+      "valid_at": "2026-04-26T22:04:50.924160-07:00"
     },
     "12h": {
-      "aqi": 36,
-      "ci_lo": 27,
-      "ci_hi": 45,
+      "aqi": 46,
+      "ci_lo": 37,
+      "ci_hi": 55,
       "category": "Good",
       "color": "#00e400",
-      "valid_at": "2026-04-27T03:30:39.660981-07:00"
+      "valid_at": "2026-04-27T04:04:50.955765-07:00"
     },
     "24h": {
-      "aqi": 34,
-      "ci_lo": 20,
-      "ci_hi": 48,
+      "aqi": 44,
+      "ci_lo": 30,
+      "ci_hi": 58,
       "category": "Good",
       "color": "#00e400",
-      "valid_at": "2026-04-27T15:30:39.695192-07:00"
+      "valid_at": "2026-04-27T16:04:50.991234-07:00"
     },
     "48h": {
-      "aqi": 32,
-      "ci_lo": 13,
-      "ci_hi": 51,
+      "aqi": 42,
+      "ci_lo": 23,
+      "ci_hi": 61,
       "category": "Good",
       "color": "#00e400",
-      "valid_at": "2026-04-28T15:30:39.728837-07:00"
+      "valid_at": "2026-04-28T16:04:51.024094-07:00"
     }
   },
   "history_72h": [
-    {
-      "timestamp": "2026-04-23T16:00:00-07:00",
-      "actual_aqi": 38,
-      "forecast_6h": 34,
-      "forecast_aqi": 34,
-      "ci_lo": 29,
-      "ci_hi": 39,
-      "forecast_12h": 33,
-      "forecast_24h": 37,
-      "forecast_48h": 34
-    },
     {
       "timestamp": "2026-04-23T17:00:00-07:00",
       "actual_aqi": 42,
@@ -101,7 +90,7 @@
       "ci_lo": 39,
       "ci_hi": 49,
       "forecast_12h": 40,
-      "forecast_24h": 41,
+      "forecast_24h": 42,
       "forecast_48h": 41
     },
     {
@@ -134,7 +123,7 @@
       "ci_lo": 36,
       "ci_hi": 46,
       "forecast_12h": 35,
-      "forecast_24h": 36,
+      "forecast_24h": 37,
       "forecast_48h": 40
     },
     {
@@ -145,7 +134,7 @@
       "ci_lo": 28,
       "ci_hi": 38,
       "forecast_12h": 33,
-      "forecast_24h": 34,
+      "forecast_24h": 35,
       "forecast_48h": 40
     },
     {
@@ -167,7 +156,7 @@
       "ci_lo": 21,
       "ci_hi": 31,
       "forecast_12h": 30,
-      "forecast_24h": 29,
+      "forecast_24h": 28,
       "forecast_48h": 38
     },
     {
@@ -244,7 +233,7 @@
       "ci_lo": 23,
       "ci_hi": 33,
       "forecast_12h": 34,
-      "forecast_24h": 28,
+      "forecast_24h": 27,
       "forecast_48h": 40
     },
     {
@@ -486,7 +475,7 @@
       "ci_lo": 31,
       "ci_hi": 41,
       "forecast_12h": 37,
-      "forecast_24h": 38,
+      "forecast_24h": 37,
       "forecast_48h": 30
     },
     {
@@ -552,7 +541,7 @@
       "ci_lo": 32,
       "ci_hi": 42,
       "forecast_12h": 35,
-      "forecast_24h": 38,
+      "forecast_24h": 39,
       "forecast_48h": 32
     },
     {
@@ -563,7 +552,7 @@
       "ci_lo": 33,
       "ci_hi": 43,
       "forecast_12h": 36,
-      "forecast_24h": 39,
+      "forecast_24h": 38,
       "forecast_48h": 35
     },
     {
@@ -652,7 +641,7 @@
       "ci_hi": 45,
       "forecast_12h": 40,
       "forecast_24h": 44,
-      "forecast_48h": 42
+      "forecast_48h": 41
     },
     {
       "timestamp": "2026-04-25T23:00:00-07:00",
@@ -840,9 +829,20 @@
       "forecast_12h": 42,
       "forecast_24h": 38,
       "forecast_48h": 36
+    },
+    {
+      "timestamp": "2026-04-26T16:00:00-07:00",
+      "actual_aqi": 44,
+      "forecast_6h": 45,
+      "forecast_aqi": 45,
+      "ci_lo": 40,
+      "ci_hi": 50,
+      "forecast_12h": 42,
+      "forecast_24h": 39,
+      "forecast_48h": 37
     }
   ],
-  "ai_summary": "The current air quality in Folsom is good, with an AQI of 39, meaning the air is satisfactory and safe for everyone to enjoy. Conditions are expected to remain good and gradually improve slightly over the next 48 hours. You can confidently engage in outdoor activities today.",
+  "ai_summary": "The current air quality in Davis is good, with an AQI of 49, meaning it's satisfactory for everyone. Conditions are expected to remain good over the next 48 hours, with the AQI forecast to stay in the good range. You can comfortably enjoy outdoor activities today and tomorrow.",
   "model_version": "Folsom-AQI-Navigator-V12",
   "model_metadata": {
     "architecture": "V11 Feature-Diversity Ensemble (LGBM-Full + XGB + LGBM-Physics + NNLS-Bias)",

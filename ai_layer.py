@@ -21,6 +21,7 @@ import requests
 from google import genai
 from google.genai import types
 
+from config import DEFAULT_CITY
 from logger import get_logger
 
 log = get_logger(__name__)
@@ -34,8 +35,8 @@ _GEMINI_REST_ENDPOINT = (
 
 # How the AI presents itself and what it knows
 _SYSTEM_PROMPT = """\
-You are the **Folsom Navigator** — the expert AI assistant embedded in the \
-Folsom AQI Monitor dashboard. This system is a physics-informed expert \
+You are the **Davis Navigator** — the expert AI assistant embedded in the \
+Davis AQI Monitor dashboard. This system is a physics-informed expert \
 assistant built for environmental monitoring.
 
 You have deep knowledge in three areas:
@@ -69,7 +70,7 @@ CRITICAL PERSONA CONSTRAINTS:
 - If asked how you work, explain that you use an 'ensemble of physics-informed \
 atmospheric patterns' to predict air quality.
 - Keep answers concise, authoritative, and friendly. Speak like a senior \
-atmospheric scientist who simplifies complex data for the Folsom public.
+atmospheric scientist who simplifies complex data for the Davis public.
 """
 
 
@@ -103,7 +104,7 @@ def _format_forecast_as_ai_context(forecast_data: dict) -> str:
     freshness = forecast_data.get("data_freshness_minutes", "unknown")
 
     lines = [
-        f"Location       : {location.get('name', 'Folsom, CA')}",
+        f"Location       : {location.get('name', DEFAULT_CITY)}",
         f"Data generated : {gen_at}  (sensor age: {freshness} min)",
         "",
         "──── CURRENT CONDITIONS ────",
@@ -140,7 +141,7 @@ def generate_summary(forecast_data: dict) -> str:
         context = _format_forecast_as_ai_context(forecast_data)
         prompt = (
             "Using the forecast data below, write a single plain-English paragraph "
-            "(3–4 sentences) summarizing current air quality in Folsom for local residents. "
+            "(3–4 sentences) summarizing current air quality in Davis for local residents. "
             "Include: what the current AQI is and what it means in everyday terms, "
             "whether conditions are expected to improve or worsen over the next 48 hours, "
             "and one practical recommendation (e.g. whether outdoor activity is advisable). "
@@ -179,7 +180,7 @@ def answer_question(question: str, forecast_data: dict) -> str:
         client = _get_client()
         context = _format_forecast_as_ai_context(forecast_data)
         prompt = (
-            f"Current forecast data for Folsom, CA:\n{context}\n\nUser question: {question.strip()}"
+            f"Current forecast data for Davis, CA:\n{context}\n\nUser question: {question.strip()}"
         )
         response = client.models.generate_content(
             model=GEMINI_MODEL,

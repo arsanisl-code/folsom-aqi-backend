@@ -37,6 +37,8 @@ def main():
         log.info("Success in %.1fs", elapsed)
         log.info("Generated at: %s", result["generated_at"])
         log.info("Data freshness: %s min", result["data_freshness_minutes"])
+        loc = result["location"]
+        log.info("Location: %s (%s, %s)", loc["name"], loc["lat"], loc["lon"])
         log.info(
             "Current AQI: %s (%s)",
             result["current"]["aqi"],

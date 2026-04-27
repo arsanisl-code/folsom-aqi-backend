@@ -24,8 +24,10 @@ load_dotenv()  # Load .env for AIRNOW_API_KEY
 
 # ─── Constants ────────────────────────────────────────────────────────────────
 
-LAT = 38.6780
-LON = -121.1761
+from config import DEFAULT_LAT as LAT
+from config import DEFAULT_LON as LON
+from config import DEFAULT_STATION
+
 TZ = "America/Los_Angeles"
 
 CACHE_DIR = Path("data/cache")
@@ -376,7 +378,7 @@ def fetch_airnow_current() -> dict | None:
             "aqi": int(best.get("AQI", 0)),
             "category": cat.get("Name", "Unknown"),
             "primary_pollutant": best.get("ParameterName", "Unknown"),
-            "station": best.get("ReportingArea", "Folsom-Natoma"),
+            "station": best.get("ReportingArea", DEFAULT_STATION),
             "timestamp": best.get("DateObserved", "").strip()
             + "T"
             + f"{best.get('HourObserved', 0):02d}:00:00",

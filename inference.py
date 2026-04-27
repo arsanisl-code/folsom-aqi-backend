@@ -19,6 +19,7 @@ import pandas as pd
 import requests
 
 from ai_layer import generate_summary
+from config import DEFAULT_CITY, DEFAULT_LAT, DEFAULT_LON, DEFAULT_STATION
 from data_fetcher import fetch_airnow_current, fetch_recent_combined
 from features import engineer_features
 from logger import get_logger
@@ -317,7 +318,7 @@ def predict_now() -> dict:
         current_aqi = station_info["aqi"]
         current_cat, current_color = aqi_category(current_aqi)
         primary_pollutant = station_info.get("primary_pollutant", "PM2.5")
-        source_name = f"AirNow ({station_info.get('station', 'Folsom-Natoma')})"
+        source_name = f"AirNow ({station_info.get('station', DEFAULT_STATION)})"
     else:
         source_name = "Open-Meteo (Interpolated)"
 
@@ -403,7 +404,7 @@ def predict_now() -> dict:
             cat, color = aqi_category(point_final)
             from datetime import timedelta
             valid_at_ts = datetime.now(TZ) + timedelta(hours=h)
-            
+
             forecasts[f"{h}h"] = {
                 "aqi": point_final,
                 "ci_lo": ci_lo,
@@ -437,9 +438,9 @@ def predict_now() -> dict:
         "generated_at": datetime.now(TZ).isoformat(),
         "data_freshness_minutes": data_age,
         "location": {
-            "name": "Folsom, CA",
-            "lat": 38.6780,
-            "lon": -121.1761
+            "name": DEFAULT_CITY,
+            "lat": DEFAULT_LAT,
+            "lon": DEFAULT_LON
         },
         "current": {
             "aqi": current_aqi,
