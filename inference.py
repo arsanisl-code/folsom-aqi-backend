@@ -484,7 +484,7 @@ def load_cached_forecast(prefer_remote: bool = False) -> dict:
             token = os.environ.get("GITHUB_TOKEN")
             if token:
                 headers["Authorization"] = f"token {token}"
-            
+
             resp = requests.get(url, headers=headers, timeout=5)
             if resp.status_code == 200:
                 return resp.json()
