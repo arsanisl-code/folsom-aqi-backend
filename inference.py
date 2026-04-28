@@ -477,15 +477,15 @@ def load_cached_forecast(prefer_remote: bool = False) -> dict:
     """
     if prefer_remote:
         # Folsom AQI Navigator CDN URL (data-cache branch)
-        # We append a cache-busting timestamp to bypass Fastly's aggressive caching of raw.githubusercontent.com
-        url = f"https://raw.githubusercontent.com/arsanisl-code/folsom-aqi-backend/data-cache/latest.json?t={int(time.time())}"
+        # We use the GitHub API to support Fine-Grained PATs and Bearer auth
+        url = f"https://api.github.com/repos/arsanisl-code/folsom-aqi-backend/contents/data/latest.json?ref=data-cache&t={int(time.time())}"
         try:
-            headers = {}
+            headers = {"Accept": "application/vnd.github.v3.raw"}
             token = os.environ.get("GITHUB_TOKEN")
             if token:
-                headers["Authorization"] = f"token {token}"
-
-            resp = requests.get(url, headers=headers, timeout=5)
+                headers["Authorization"] = f"Bearer {token}"
+            
+            resp = requests.get(url, headers=headers, timeout=8)
             if resp.status_code == 200:
                 return resp.json()
             else:
