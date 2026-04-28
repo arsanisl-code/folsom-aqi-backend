@@ -8,6 +8,7 @@ the named sub-functions below, each with a single responsibility.
 """
 
 import json
+import os
 import time
 from datetime import datetime
 from pathlib import Path
@@ -478,9 +479,16 @@ def load_cached_forecast(prefer_remote: bool = False) -> dict:
         # We append a cache-busting timestamp to bypass Fastly's aggressive caching of raw.githubusercontent.com
         url = f"https://raw.githubusercontent.com/arsanisl-code/folsom-aqi-backend/data-cache/latest.json?t={int(time.time())}"
         try:
-            resp = requests.get(url, timeout=5)
+            headers = {}
+            token = os.environ.get("GITHUB_TOKEN")
+            if token:
+                headers["Authorization"] = f"token {token}"
+            
+            resp = requests.get(url, headers=headers, timeout=5)
             if resp.status_code == 200:
                 return resp.json()
+            else:
+                log.warning(f"Remote cache returned HTTP {resp.status_code}")
         except Exception as e:
             log.warning(f"Failed to fetch remote cache: {e}")
             # Fall through to local cache
