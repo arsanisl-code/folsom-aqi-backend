@@ -370,8 +370,12 @@ def fetch_airnow_current() -> dict | None:
         if not data or not isinstance(data, list) or len(data) == 0:
             return None
 
-        # Pick the entry with the highest AQI (dominant pollutant)
-        best = max(data, key=lambda x: x.get("AQI", 0))
+        # Prefer the local station to avoid picking up distant stations with higher AQI
+        local_data = [x for x in data if DEFAULT_STATION in x.get("ReportingArea", "")]
+        if local_data:
+            best = max(local_data, key=lambda x: x.get("AQI", 0))
+        else:
+            best = max(data, key=lambda x: x.get("AQI", 0))
         cat = best.get("Category", {})
 
         return {
